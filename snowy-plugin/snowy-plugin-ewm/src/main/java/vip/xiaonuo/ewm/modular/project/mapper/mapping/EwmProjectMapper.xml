@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="vip.xiaonuo.ewm.modular.project.mapper.EwmProjectMapper">
+    <select id="selectEwmProjectAndOrgList" parameterType="vip.xiaonuo.ewm.modular.project.param.EwmProjectPageParam"
+            resultType="vip.xiaonuo.ewm.modular.project.entity.EwmProjectList">
+        select a.*,b.name as orgName from ewm_project a left join sys_org b on a.org_id = b.id
+        <where>
+            and a.delete_flag = 'NOT_DELETE'
+            <if test="ewmProjectPageParam.projectName != null and ewmProjectPageParam.projectName != ''">
+                and a.project_name like concat('%',#{ewmProjectPageParam.projectName},'%')
+            </if>
+            <if test="ewmProjectPageParam.projectLeader != null and ewmProjectPageParam.projectLeader != ''">
+                and a.project_leader like concat('%',#{ewmProjectPageParam.projectLeader},'%')
+            </if>
+            <if test="ewmProjectPageParam.orgId != null and ewmProjectPageParam.orgId != ''">
+                and a.org_id = #{ewmProjectPageParam.orgId}
+            </if>
+            <if test="ewmProjectPageParam.projectStatus != null and ewmProjectPageParam.projectStatus !=''">
+                and a.project_status = #{ewmProjectPageParam.projectStatus}
+            </if>
+            <if test="ewmProjectPageParam.projectType != null and ewmProjectPageParam.projectType !=''">
+                and a.project_type = #{ewmProjectPageParam.projectType}
+            </if>
+            order by a.create_time desc
+        </where>
+    </select>
+</mapper>
