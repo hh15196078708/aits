@@ -16,6 +16,29 @@
 					</template>
 					新建文件夹
 				</a-button>
+
+				<!--				&lt;!&ndash; 上传队列气泡 &ndash;&gt;-->
+				<!--				<a-popover v-if="uploadQueue.length > 0" title="上传队列" trigger="click" placement="bottomLeft">-->
+				<!--					<template #content>-->
+				<!--						<div class="w-72 max-h-60 overflow-y-auto custom-scrollbar">-->
+				<!--							<div v-for="task in uploadQueue" :key="task.id" class="mb-3">-->
+				<!--								<div class="flex justify-between text-xs mb-1 text-gray-600">-->
+				<!--									<span class="truncate max-w-[70%]" :title="task.name">{{ task.name }}</span>-->
+				<!--									<span>{{ task.status === 'done' ? '完成' : task.progress + '%' }}</span>-->
+				<!--								</div>-->
+				<!--								<a-progress-->
+				<!--									:percent="task.progress"-->
+				<!--									size="small"-->
+				<!--									:status="getUploadStatus(task.status)"-->
+				<!--									:show-info="false"-->
+				<!--								/>-->
+				<!--							</div>-->
+				<!--						</div>-->
+				<!--					</template>-->
+				<!--					<a-button :loading="isUploading">-->
+				<!--						{{ isUploading ? `正在上传 (${uploadQueue.length})` : '上传完成' }}-->
+				<!--					</a-button>-->
+				<!--				</a-popover>-->
 			</div>
 
 			<!-- 右侧筛选区 -->
@@ -76,16 +99,6 @@
         onShowSizeChange: handlePageChange
     }"
 					:sticky="true"
-					:row-selection="isSelector ? {
-    selectedRowKeys: selectedRowKeys,
-    onChange: onSelectChange,
-    type: multiple ? 'checkbox' : 'radio',
-    getCheckboxProps: (record) => ({
-        // 修改点：只有明确指定 selectType 为 'file' 时才禁用文件夹
-        // 如果 selectType 是 'all' (默认值) 或 'folder'，则文件夹可选
-        disabled: props.selectType === 'file' ? record.isFolder : (props.selectType === 'folder' ? !record.isFolder : false)
-    })
-} : null"
 				>
 
 					<template #bodyCell="{ column, record }">
@@ -109,8 +122,7 @@
 						</template>
 						<template v-else-if="column.key === 'action'">
 							<a-space>
-								<a class="text-blue-500 hover:text-blue-700"
-								   @click.stop="openRenameModal(record)">重命名</a>
+								<a class="text-blue-500 hover:text-blue-700" @click.stop="openRenameModal(record)">重命名</a>
 								<a class="text-blue-500 hover:text-blue-700"
 								   @click.stop="openMoveModal(record)">移动</a>
 								<a-popconfirm title="确定要删除此文件吗？" @confirm="handleDelete(record)">
@@ -131,13 +143,6 @@
 						class="group relative border border-gray-200 rounded-lg p-4 flex flex-col items-center cursor-pointer hover:shadow-md hover:border-primary hover:bg-blue-50 transition-all bg-white"
 						@click="handleItemClick(item)"
 					>
-						<div v-if="isSelector" class="absolute top-2 left-2 z-10" @click.stop>
-							<a-checkbox
-								:disabled="props.selectType === 'file' ? item.isFolder : (props.selectType === 'folder' ? !item.isFolder : false)"
-								:checked="selectedRowKeys.includes(item.id)"
-								@change="(e) => toggleGridSelection(item, e.target.checked)"
-							/>
-						</div>
 						<div class="text-7xl mb-4 transition-transform group-hover:scale-110">
 							<component
 								:is="getFileIcon(item)"
@@ -286,41 +291,10 @@
 		>
 			<a-form layout="vertical">
 				<a-form-item label="名称" required>
-					<a-input v-model:value="renameModal.newName" placeholder="请输入新名称" allow-clear/>
+					<a-input v-model:value="renameModal.newName" placeholder="请输入新名称" allow-clear />
 				</a-form-item>
 			</a-form>
 		</a-modal>
-		<div v-if="isSelector" class="flex flex-col border-t bg-gray-50 p-3 mt-auto">
-			<div class="flex flex-wrap gap-2 mb-3 min-h-[32px]">
-				<span class="text-gray-400 text-xs self-center">暂存区：</span>
-				<a-tag
-					v-for="(item, index) in selectedRows"
-					:key="item.id"
-					closable
-					:color="item.isFolder ? 'orange' : 'blue'"
-					@close="removeSelectedItem(item.id)"
-				>
-					<template #icon>
-						<FolderOutlined v-if="item.isFolder" />
-						<PaperClipOutlined v-else />
-					</template>
-					{{ item.name }}
-				</a-tag>
-				<span v-if="selectedRows.length === 0" class="text-gray-300 text-xs self-center">未勾选任何项</span>
-			</div>
-
-			<div class="flex justify-between items-center">
-				<div class="text-xs text-gray-500">
-					已选择 <span class="text-primary font-bold">{{ selectedRowKeys.length }}</span> 个项目
-				</div>
-				<a-space>
-					<a-button size="small" @click="clearSelection">清空</a-button>
-					<a-button type="primary" size="small" @click="submitSelection">
-						确认选择
-					</a-button>
-				</a-space>
-			</div>
-		</div>
 	</div>
 </template>
 
@@ -335,58 +309,11 @@ import {
 	FolderOutlined, FolderOpenOutlined, FileOutlined,
 	FileImageOutlined, FilePdfOutlined, FileWordOutlined,
 	FileExcelOutlined, FilePptOutlined, FileTextOutlined,
-	FileZipOutlined, FileMarkdownOutlined,PlusOutlined, PaperClipOutlined
+	FileZipOutlined, FileMarkdownOutlined
 } from '@ant-design/icons-vue';
 // 引入 API
 import fileApi from '@/api/file';
 
-const props = defineProps({
-	// 是否开启选择模式 (默认为 false，即正常的管理模式)
-	isSelector: {
-		type: Boolean,
-		default: false
-	},
-	// 选择类型：file(仅文件), folder(仅文件夹), all(所有)
-	selectType: {
-		type: String,
-		default: 'all'
-	},
-	// 是否支持多选
-	multiple: {
-		type: Boolean,
-		default: true
-	}
-});
-
-const emit = defineEmits(['onSelect']);
-// --- 状态定义增加 ---
-// 存储选中的行 ID（Ant Design Table 需要）
-const selectedRowKeys = ref([]);
-// 存储选中的完整对象
-const selectedRows = ref([]);
-
-// 处理选中变化的逻辑
-// 勾选变化处理 (适配 Table)
-const onSelectChange = (keys, rows) => {
-	// 因为 a-table 的 rows 只能获取当前页的选中项，
-	// 为了支持跨页选择，我们需要手动管理 selectedRows。
-
-	// 1. 先把当前页没被勾选的项从总列表里移除
-	const currentPageIds = fileList.value.map(item => item.id)
-	selectedRows.value = selectedRows.value.filter(item => {
-		// 如果不在当前页，保留；如果在当前页且被勾选，保留
-		return !currentPageIds.includes(item.id) || keys.includes(item.id)
-	})
-
-	// 2. 把新勾选的项加入总列表
-	rows.forEach(row => {
-		if (!selectedRows.value.some(item => item.id === row.id)) {
-			selectedRows.value.push(row)
-		}
-	})
-
-	selectedRowKeys.value = keys;
-};
 // --- 上传配置 ---
 const CHUNK_SIZE = 5 * 1024 * 1024; // 增加到 5MB 提升效率
 const MAX_CONCURRENT = 3; // 最大并发上传数
@@ -454,46 +381,7 @@ const columns = [
 onMounted(() => {
 	loadData();
 });
-// 网格模式下的手动勾选处理
-// 网格模式下的勾选处理
-const toggleGridSelection = (item, checked) => {
-	if (checked) {
-		if (!selectedRowKeys.value.includes(item.id)) {
-			selectedRowKeys.value.push(item.id)
-			selectedRows.value.push(item)
-		}
-	} else {
-		removeSelectedItem(item.id)
-	}
-};
-// 从暂存区移除单项 (点击 Tag 的 X)
-const removeSelectedItem = (id) => {
-	selectedRowKeys.value = selectedRowKeys.value.filter(k => k !== id)
-	selectedRows.value = selectedRows.value.filter(r => r.id !== id)
-};
 
-// 清空所有选择
-const clearSelection = () => {
-	selectedRowKeys.value = []
-	selectedRows.value = []
-};
-// 提交最终结果给父组件
-const submitSelection = () => {
-	if (selectedRows.value.length === 0) {
-		message.warning('请至少勾选一个文件或文件夹');
-		return;
-	}
-	// 构造回显数据
-	const result = selectedRows.value.map(item => ({
-		id: item.id,
-		name: item.name,
-		isFolder: item.isFolder
-	}));
-
-	emit('onSelect', props.multiple ? result : result[0]);
-	// 提交后清空，防止下次打开还在
-	clearSelection()
-};
 // --- 数据加载 ---
 const loadData = async (parentId = '0', searchKeyword = null) => {
 	loading.value = true;
@@ -706,7 +594,7 @@ const processUpload = async (file, taskRef) => {
 
 		//2. 调用后端检查接口
 		taskRef.value.statusText = '秒传校验中...';
-		const checkRes = await fileApi.checkFile({hash: fileHash, parentId: currentFolderId.value});
+		const checkRes = await fileApi.checkFile({ hash: fileHash, parentId: currentFolderId.value });
 		const resultData = checkRes.data || checkRes;
 
 		if (resultData.needUpload === false) {
@@ -784,7 +672,7 @@ const openMoveModal = async (record) => {
 	moveModal.value.loading = true; // 开启小 loading
 
 	// 初始化根节点
-	const rootNode = {id: '0', name: '根目录', value: '0', key: '0', isLeaf: false, children: []};
+	const rootNode = { id: '0', name: '根目录', value: '0', key: '0', isLeaf: false, children: [] };
 
 	try {
 		const treeFrom = ref({
@@ -931,10 +819,9 @@ const getUploadStatus = (status) => {
 </script>
 
 <style lang="less" scoped>
-.xdfontSize {
+.xdfontSize{
 	font-size: 40px;
 }
-
 .xd-file-manager {
 	/* 自定义滚动条样式 */
 

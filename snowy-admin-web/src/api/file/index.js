@@ -25,6 +25,19 @@ export default {
 	// 	})
 	// },
 
+	// 检查文件（秒传/断点续传）
+	checkFile(params) {
+		return request('upload/checkFile', params,'get')
+	},
+
+	edit(data) {
+		return request('edit', data,'post')
+	},
+
+	move(data) {
+		return request('move', data,'post')
+	},
+
 	// 获取项目表分页
 	createFolder(data) {
 		return request('folder', data)
@@ -34,15 +47,16 @@ export default {
 	 * @param {FormData} formData 包含 chunk, hash, index, fileName
 	 * @param {function} onUploadProgress 上传进度回调
 	 */
-	uploadChunk(formData, onUploadProgress) {
-		return request({
-			url: 'upload/chunk',
-			method: 'post',
-			data: formData,
-			// 允许上传大文件，根据需要调整超时时间
-			timeout: 0,
-			onUploadProgress
-		})
+	uploadChunk(formData) {
+		return request("upload/chunk", formData)
+		// return request({
+		// 	url: 'upload/chunk',
+		// 	method: 'post',
+		// 	data: formData,
+		// 	// 允许上传大文件，根据需要调整超时时间
+		// 	timeout: 0,
+		// 	onUploadProgress
+		// })
 	},
 
 	/**
@@ -50,35 +64,18 @@ export default {
 	 * @param {object} data { hash: 'xxx', fileName: 'xxx', parentId: 'xxx' }
 	 */
 	mergeChunks(data) {
-		return request({
-			url: 'upload/merge',
-			method: 'post',
-			data
-		})
+		return request("upload/merge", data)
+		// return request({
+		// 	url: 'upload/merge',
+		// 	method: 'post',
+		// 	data
+		// })
 	},
 
-	/**
-	 * 删除文件/文件夹
-	 * @param {string} id 文件ID
-	 */
-	deleteFile(id) {
-		return request({
-			url: 'delete',
-			method: 'post',
-			data: { id }
-		})
+	deleteFile(data) {
+		return request('delete', data,'post')
 	},
 
-	/**
-	 * 移动文件
-	 * @param {object} data { fileId: 'xxx', targetId: 'xxx' }
-	 */
-	moveFile(data) {
-		return request({
-			url: 'file/move',
-			method: 'post',
-			data
-		})
-	}
+
 
 }

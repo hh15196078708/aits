@@ -80,4 +80,12 @@ public class SysFiles {
     @Schema(description = "修改用户")
     @TableField(fill = FieldFill.UPDATE)
     private String updateUser;
+
+    /** 文件MD5 */
+    @Schema(description = "文件MD5")
+    private String fileMd5;
+
+    /** 文件类型 */
+    @Schema(description = "文件类型")
+    private String fileType;
 }

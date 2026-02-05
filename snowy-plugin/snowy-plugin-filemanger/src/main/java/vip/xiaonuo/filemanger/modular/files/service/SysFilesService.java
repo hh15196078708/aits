@@ -10,6 +10,8 @@ import vip.xiaonuo.common.pojo.CommonResult;
 import vip.xiaonuo.filemanger.modular.files.entity.SysFiles;
 import vip.xiaonuo.filemanger.modular.files.param.FileVO;
 import vip.xiaonuo.filemanger.modular.files.param.MergeRequest;
+import vip.xiaonuo.filemanger.modular.files.param.SysFilesEditParam;
+import vip.xiaonuo.filemanger.modular.files.param.SysFilesPageParam;
 
 import java.io.IOException;
 import java.util.List;
@@ -29,5 +31,14 @@ public interface SysFilesService extends IService<SysFiles> {
                                      @RequestParam("index") Integer index) throws IOException;
 
     CommonResult<FileVO> mergeChunks(MergeRequest mergeRequest) throws IOException;
+
+    CommonResult<JSONObject> checkFile(String hash,String parentId);
+
+    Page<SysFiles> page(SysFilesPageParam sysFilesPageParam);
+
+    void edit(SysFilesEditParam param);
+    void move(SysFilesEditParam param);
+
+    void deleteFile(SysFilesEditParam param);
 
 }

@@ -74,5 +74,19 @@ public class EwmProject extends CommonEntity {
     @Schema(description = "项目附件")
     private String projectFiles;
 
+    @Schema(description = "项目验收时间")
+    @JsonFormat(locale = "zh", timezone = "GMT+8", pattern = "yyyy-MM-dd")
+    private Date projectAcceptTime;
 
+    @Schema(description = "客户经办人")
+    private String projectCustomer;
+
+    @Schema(description = "客户联系方式")
+    private String projectCustomerPhone;
+
+    @Schema(description = "项目地址")
+    private String projectLat;
+
+    @Schema(description = "项目地址")
+    private String projectLnt;
 }

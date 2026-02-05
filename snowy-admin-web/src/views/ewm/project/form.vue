@@ -33,11 +33,6 @@
 						<a-input type="number" v-model:value="formData.sortCode" placeholder="请输入排序码" allow-clear />
 					</a-form-item>
 				</a-col>
-<!--				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">-->
-<!--					<a-form-item label="扩展信息：" name="extJson">-->
-<!--						<a-input v-model:value="formData.extJson" placeholder="请输入扩展信息" allow-clear />-->
-<!--					</a-form-item>-->
-<!--				</a-col>-->
 				<a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
 					<a-form-item label="所属组织：" name="orgId">
 						<a-tree-select
@@ -66,7 +61,6 @@
 				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
 					<a-form-item label="项目类别" name="projectType">
 						<a-select v-model:value="formData.projectType" placeholder="请选择项目类别" :options="peojectTypeOptions" />
-<!--						<a-input v-model:value="formData.projectType" placeholder="请输入项目类别" allow-clear />-->
 					</a-form-item>
 				</a-col>
 				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
@@ -81,14 +75,36 @@
 				</a-col>
 				<a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
 					<a-form-item label="项目附件：" name="projectFiles">
-						<xn-upload v-model:value="formData.projectFiles"
-								   uploadMode="drag" :uploadNumber="9"
-								   uploadText="附件上传"
-								   uploadResultCategory="array"
-								   :completeResult="true"
-						/>
+						<div class="border rounded p-2 bg-gray-50 flex flex-wrap gap-2 min-h-[40px]">
+							<a-tag
+								v-for="(file, index) in formData.projectFiles"
+								:key="file.id"
+								closable
+								color="blue"
+								@close="formData.projectFiles.splice(index, 1)"
+							>
+								<template #icon>
+									<FolderOutlined v-if="file.isFolder" />
+									<PaperClipOutlined v-else />
+								</template>
+								{{ file.name }}
+							</a-tag>
+							<a-button type="dashed" size="small" @click="onModel">
+								<PlusOutlined /> 添加项目文件
+							</a-button>
+						</div>
 					</a-form-item>
 				</a-col>
+<!--				<a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">-->
+<!--					<a-form-item label="项目附件：" name="projectFiles">-->
+<!--						<xn-upload v-model:value="formData.projectFiles"-->
+<!--								   uploadMode="drag" :uploadNumber="9"-->
+<!--								   uploadText="附件上传"-->
+<!--								   uploadResultCategory="array"-->
+<!--								   :completeResult="true"-->
+<!--						/>-->
+<!--					</a-form-item>-->
+<!--				</a-col>-->
 				<a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
 					<a-form-item label="项目说明：" name="projectDesc">
 						<xn-editor v-model:value="formData.projectDesc" placeholder="请输入项目说明" />
@@ -98,22 +114,21 @@
 		</a-form>
 		<template #footer>
 			<a-button style="margin-right: 8px" @click="onClose">关闭</a-button>
-			<a-button style="margin-right: 8px" @click="onModel">弹框</a-button>
 			<a-button type="primary" @click="onSubmit" :loading="submitLoading">保存</a-button>
 		</template>
 	</xn-form-container>
 	<a-modal
 		v-model:visible="modelVisible"
-		title="Basic Modal"
+		title="文件管理"
 		@ok="handleOk"
-		width="100%"
-		wrapClassName="full-modal"
+		width="700"
+		:footer="null"
 	>
 		<xd-file-manger
-			:initial-files="mockData"
-			@upload="onUpload"
-			@delete="onDelete"
-			@move="onMove"
+			:isSelector="true"
+			selectType="all"
+			:multiple="true"
+			@onSelect="handleFileSelected"
 		>
 
 		</xd-file-manger>
@@ -127,6 +142,8 @@ import { cloneDeep } from 'lodash-es'
 import { required } from '@/utils/formRules'
 import ewmProjectApi from '@/api/ewm/ewmProjectApi'
 import orgApi from "@/api/sys/orgApi";
+import { PlusOutlined, PaperClipOutlined } from '@ant-design/icons-vue'
+import {message} from 'ant-design-vue';
 // 抽屉状态
 const open = ref(false)
 const modelVisible = ref(false)
@@ -149,6 +166,7 @@ const onMove = (file) => {}
 // 打开抽屉
 const onOpen = (record) => {
 	open.value = true
+	formData.value = { sortCode: 99, projectFiles: [] } // 初始化默认值
 	if (record) {
 		let recordData = cloneDeep(record)
 		console.log(recordData)
@@ -156,19 +174,23 @@ const onOpen = (record) => {
 			id: recordData.id
 		}
 		ewmProjectApi.ewmProjectDetail(param).then((res) => {
+			// 后端存储的是字符串，前端回显需要转为对象数组
 			if(tool.isNotEmpty(res.projectFiles)){
-				res.projectFiles = JSON.parse(res.projectFiles)
+				try {
+					res.projectFiles = JSON.parse(res.projectFiles)
+				} catch (e) {
+					res.projectFiles = []
+				}
+			} else {
+				res.projectFiles = []
 			}
+			// if(tool.isNotEmpty(res.projectFiles)){
+			// 	res.projectFiles = JSON.parse(res.projectFiles)
+			// }
 			formData.value = Object.assign({}, res)
 		})
-		console.log(formData.value)
-		//
-		// if(tool.isNotEmpty(recordData.projectFiles)){
-		// 	recordData.projectFiles = JSON.parse(recordData.projectFiles)
-		// }
-		// formData.value = Object.assign({}, recordData)
+
 	}
-	// orgIdOptions.value = tool.dictList('ORG_CATEGORY')
 	peojectStatusOptions.value = tool.dictList('PROJECT_STATUS')
 	peojectTypeOptions.value = tool.dictList('PROJECT_TYPE')
 	// 获取机构树并加入顶级
@@ -196,6 +218,32 @@ const formRules = {
 	orgId: [required('请选择机构id')],
 	projectStatus: [required('请选择项目状态')],
 	projectType: [required('请选择项目类别')],
+}
+const handleFileSelected = (files) => {
+	// 确保 projectFiles 是数组
+	if (!formData.value.projectFiles) {
+		formData.value.projectFiles = []
+	}
+
+	// 将新选中的文件与已有的合并，并根据 ID 去重
+	const newFiles = Array.isArray(files) ? files : [files]
+
+	newFiles.forEach(newFile => {
+		const isExist = formData.value.projectFiles.some(item => item.id === newFile.id)
+		if (!isExist) {
+			formData.value.projectFiles.push({
+				id: newFile.id,
+				name: newFile.name
+			})
+		}
+	})
+
+	modelVisible.value = false
+	message.success(`已关联 ${newFiles.length} 个文件`)
+};
+// 增加删除已选文件的函数
+const removeFile = (index) => {
+	formData.value.projectFiles.splice(index, 1)
 }
 const handleOk = () => {
 }
@@ -229,3 +277,16 @@ defineExpose({
 	onOpen
 })
 </script>
+<style scoped>
+.file-display-container {
+	background-color: #fafafa;
+	border: 1px solid #f0f0f0;
+	padding: 12px;
+	border-radius: 4px;
+}
+/* 如果你使用了 Tailwind，上面的 class 已经处理了布局 */
+.flex { display: flex; }
+.flex-wrap { flex-wrap: wrap; }
+.gap-2 { gap: 0.5rem; }
+.items-center { align-items: center; }
+</style>
