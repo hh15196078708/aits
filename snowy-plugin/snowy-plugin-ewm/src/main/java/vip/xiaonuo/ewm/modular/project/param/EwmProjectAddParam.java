@@ -1,6 +1,7 @@
 package vip.xiaonuo.ewm.modular.project.param;
 
 import com.alibaba.excel.annotation.format.DateTimeFormat;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
@@ -79,4 +80,8 @@ public class EwmProjectAddParam {
     /** 项目附件 */
     @Schema(description = "项目附件")
     private String projectFiles;
+
+    @Schema(description = "项目验收时间")
+    @DateTimeFormat("yyyy-MM-dd")
+    private Date projectAcceptTime;
 }

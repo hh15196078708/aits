@@ -13,26 +13,6 @@
 						<a-input v-model:value="formData.projectName" placeholder="请输入项目名称" allow-clear />
 					</a-form-item>
 				</a-col>
-				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
-					<a-form-item label="项目负责人：" name="projectLeader">
-						<a-input v-model:value="formData.projectLeader" placeholder="请输入项目负责人" allow-clear />
-					</a-form-item>
-				</a-col>
-				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
-					<a-form-item label="联系方式：" name="projectLeaderPhone">
-						<a-input v-model:value="formData.projectLeaderPhone" placeholder="请输入联系方式" allow-clear />
-					</a-form-item>
-				</a-col>
-				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
-					<a-form-item label="项目金额：" name="projectMoney">
-						<a-input type="number" v-model:value="formData.projectMoney" placeholder="请输入项目金额" allow-clear prefix="￥" suffix="RMB" />
-					</a-form-item>
-				</a-col>
-				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
-					<a-form-item label="排序码：" name="sortCode">
-						<a-input type="number" v-model:value="formData.sortCode" placeholder="请输入排序码" allow-clear />
-					</a-form-item>
-				</a-col>
 				<a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
 					<a-form-item label="所属组织：" name="orgId">
 						<a-tree-select
@@ -54,6 +34,37 @@
 					</a-form-item>
 				</a-col>
 				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
+					<a-form-item label="客户经办人：" name="projectCustomer">
+						<a-input v-model:value="formData.projectCustomer" placeholder="请输入客户经办人" allow-clear />
+					</a-form-item>
+				</a-col>
+				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
+					<a-form-item label="客户联系方式：" name="projectCustomerPhone">
+						<a-input v-model:value="formData.projectCustomerPhone" placeholder="请输入客户联系方式" allow-clear />
+					</a-form-item>
+				</a-col>
+				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
+					<a-form-item label="项目负责人：" name="projectLeader">
+						<a-input v-model:value="formData.projectLeader" placeholder="请输入项目负责人" allow-clear />
+					</a-form-item>
+				</a-col>
+				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
+					<a-form-item label="联系方式：" name="projectLeaderPhone">
+						<a-input v-model:value="formData.projectLeaderPhone" placeholder="请输入联系方式" allow-clear />
+					</a-form-item>
+				</a-col>
+				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
+					<a-form-item label="项目金额：" name="projectMoney">
+						<a-input type="number" v-model:value="formData.projectMoney" placeholder="请输入项目金额" allow-clear prefix="￥" suffix="RMB" />
+					</a-form-item>
+				</a-col>
+				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
+					<a-form-item label="排序码：" name="sortCode">
+						<a-input type="number" v-model:value="formData.sortCode" placeholder="请输入排序码" allow-clear />
+					</a-form-item>
+				</a-col>
+
+				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
 					<a-form-item label="项目状态" name="projectStatus">
 						<a-select v-model:value="formData.projectStatus" placeholder="请选择项目状态" :options="peojectStatusOptions" />
 					</a-form-item>
@@ -69,8 +80,8 @@
 					</a-form-item>
 				</a-col>
 				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
-					<a-form-item label="项目结束日期：" name="projectEndTime">
-						<a-date-picker v-model:value="formData.projectEndTime" value-format="YYYY-MM-DD" placeholder="请选择项目结束日期" style="width: 100%" />
+					<a-form-item label="项目验收日期：" name="projectAcceptTime">
+						<a-date-picker v-model:value="formData.projectAcceptTime" value-format="YYYY-MM-DD" placeholder="请选择项目结束日期" style="width: 100%" />
 					</a-form-item>
 				</a-col>
 				<a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
@@ -157,6 +168,7 @@ const submitLoading = ref(false)
 const orgIdOptions = ref([])
 const peojectStatusOptions = ref([])
 const peojectTypeOptions = ref([])
+
 // 定义机构元素
 const treeData = ref([])
 const mockData = ref([])
@@ -166,7 +178,10 @@ const onMove = (file) => {}
 // 打开抽屉
 const onOpen = (record) => {
 	open.value = true
-	formData.value = { sortCode: 99, projectFiles: [] } // 初始化默认值
+	formData.value = {
+		sortCode: 99,
+		projectFiles: [],
+	}
 	if (record) {
 		let recordData = cloneDeep(record)
 		console.log(recordData)

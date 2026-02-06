@@ -99,4 +99,8 @@ public class EwmProjectEditParam {
     /** 项目附件 */
     @Schema(description = "项目附件")
     private String projectFiles;
+
+    @Schema(description = "项目验收时间")
+    @DateTimeFormat("yyyy-MM-dd")
+    private Date projectAcceptTime;
 }
