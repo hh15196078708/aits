@@ -12,6 +12,18 @@
 						<a-input v-model:value="searchFormState.projectLeader" placeholder="请输入项目负责人" />
 					</a-form-item>
 				</a-col>
+				<!-- 新增客户选择下拉框 -->
+				<a-col :span="6">
+					<a-form-item label="所属客户" name="clientId">
+						<a-select v-model:value="searchFormState.clientId" placeholder="请选择客户" allowClear>
+							<a-select-option v-for="item in clientList" :key="item.id" :value="item.id">
+								{{ item.name }}
+							</a-select-option>
+						</a-select>
+					</a-form-item>
+				</a-col>
+
+
 				<a-col :xs="24" :sm="6" :md="6" :lg="6" :xl="6">
 					<a-form-item>
 						<a-space>
@@ -103,11 +115,14 @@ import { cloneDeep } from 'lodash-es'
 import Form from './form.vue'
 import downloadUtil from '@/utils/downloadUtil'
 import ewmProjectApi from '@/api/ewm/ewmProjectApi'
+import ewmClientApi from '@/api/ewm/ewmClientApi'
 const searchFormState = ref({})
 const searchFormRef = ref()
 const tableRef = ref()
 const importModelRef = ref()
 const formRef = ref()
+// 客户列表数据
+const clientList = ref([])
 const toolConfig = { refresh: true, height: true, columnSetting: true, striped: false }
 const columns = [
 	{
@@ -117,6 +132,10 @@ const columns = [
 	{
 		title: '项目负责人',
 		dataIndex: 'projectLeader'
+	},
+	{
+		title: '所属客户',
+		dataIndex: 'clientName'
 	},
 	{
 		title: '所属机构',
@@ -177,6 +196,9 @@ const loadData = (parameter) => {
 		return data
 	})
 }
+onMounted(() => {
+	loadClientList()
+})
 // 重置
 const reset = () => {
 	searchFormRef.value.resetFields()
@@ -191,6 +213,13 @@ const deleteEwmProject = (record) => {
 	]
 	ewmProjectApi.ewmProjectDelete(params).then(() => {
 		tableRef.value.refresh(true)
+	})
+}
+// 加载客户列表
+const loadClientList = () => {
+	// 假设这里调用的是不分页的列表接口，如果没有请使用分页接口并将size设置大一点
+	ewmClientApi.ewmClientPage({ current: 1, size: 999 }).then((res) => {
+		clientList.value = res.records
 	})
 }
 // 导出

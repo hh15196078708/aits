@@ -17,4 +17,7 @@ public class EwmProjectList extends EwmProject {
     @Schema(description = "机构名称")
     private String orgName;
 
+    @Schema(description = "客户名称")
+    private String clientName;
+
 }

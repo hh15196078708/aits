@@ -3,7 +3,9 @@
 <mapper namespace="vip.xiaonuo.ewm.modular.project.mapper.EwmProjectMapper">
     <select id="selectEwmProjectAndOrgList" parameterType="vip.xiaonuo.ewm.modular.project.param.EwmProjectPageParam"
             resultType="vip.xiaonuo.ewm.modular.project.entity.EwmProjectList">
-        select a.*,b.name as orgName from ewm_project a left join sys_org b on a.org_id = b.id
+        select a.*,b.name as orgName,c.name as clientName from ewm_project a
+            left join sys_org b on a.org_id = b.id
+            left join ewm_client c on a.client_id = c.id
         <where>
             and a.delete_flag = 'NOT_DELETE'
             <if test="ewmProjectPageParam.projectName != null and ewmProjectPageParam.projectName != ''">
@@ -20,6 +22,10 @@
             </if>
             <if test="ewmProjectPageParam.projectType != null and ewmProjectPageParam.projectType !=''">
                 and a.project_type = #{ewmProjectPageParam.projectType}
+            </if>
+            <!-- 新增客户ID筛选 -->
+            <if test="ewmProjectPageParam.clientId != null and ewmProjectPageParam.clientId !=''">
+                and a.client_id = #{ewmProjectPageParam.clientId}
             </if>
             order by a.create_time desc
         </where>

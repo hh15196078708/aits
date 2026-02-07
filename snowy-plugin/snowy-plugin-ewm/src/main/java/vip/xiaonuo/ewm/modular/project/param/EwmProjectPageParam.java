@@ -53,6 +53,9 @@ public class EwmProjectPageParam {
     @Schema(description = "项目分类")
     private String projectType;
 
+    @Schema(description = "所属客户")
+    private String clientId;
+
 
 
 }

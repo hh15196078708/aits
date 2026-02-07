@@ -28,4 +28,8 @@ public class EwmClientPageParam {
     /** 经办人 */
     @Schema(description = "经办人")
     private String agent;
+
+    /** 客户id */
+    @Schema(description = "所属客户")
+    private String clientId;
 }

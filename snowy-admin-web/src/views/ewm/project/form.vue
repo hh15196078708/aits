@@ -13,7 +13,14 @@
 						<a-input v-model:value="formData.projectName" placeholder="请输入项目名称" allow-clear />
 					</a-form-item>
 				</a-col>
-				<a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
+				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
+					<a-form-item label="所属客户：" name="clientId">
+						<a-select v-model:value="formData.clientId" placeholder="请选择客户" allow-clear>
+							<a-select-option v-for="item in clientList" :key="item.id" :value="item.id">{{ item.name }}</a-select-option>
+						</a-select>
+					</a-form-item>
+				</a-col>
+				<a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
 					<a-form-item label="所属组织：" name="orgId">
 						<a-tree-select
 							v-model:value="formData.orgId"
@@ -152,6 +159,7 @@ import tool from '@/utils/tool'
 import { cloneDeep } from 'lodash-es'
 import { required } from '@/utils/formRules'
 import ewmProjectApi from '@/api/ewm/ewmProjectApi'
+import ewmClientApi from '@/api/ewm/ewmClientApi'
 import orgApi from "@/api/sys/orgApi";
 import { PlusOutlined, PaperClipOutlined } from '@ant-design/icons-vue'
 import {message} from 'ant-design-vue';
@@ -168,7 +176,7 @@ const submitLoading = ref(false)
 const orgIdOptions = ref([])
 const peojectStatusOptions = ref([])
 const peojectTypeOptions = ref([])
-
+const clientList = ref([])
 // 定义机构元素
 const treeData = ref([])
 const mockData = ref([])
@@ -219,6 +227,7 @@ const onOpen = (record) => {
 			}
 		]
 	})
+	loadClientList()
 }
 // 关闭抽屉
 const onClose = () => {
@@ -226,11 +235,18 @@ const onClose = () => {
 	formData.value = {}
 	open.value = false
 }
+// 获取客户列表
+const loadClientList = () => {
+	ewmClientApi.ewmClientPage({ current: 1, size: 999 }).then((res) => {
+		clientList.value = res.records
+	})
+}
 // 默认要校验的
 const formRules = {
 	projectName: [required('请输入项目名称')],
 	projectLeader: [required('请输入项目负责人')],
 	orgId: [required('请选择机构id')],
+	clientId: [required('请选择所属客户')],
 	projectStatus: [required('请选择项目状态')],
 	projectType: [required('请选择项目类别')],
 }
@@ -274,6 +290,8 @@ const onSubmit = () => {
 			const formDataParam = cloneDeep(formData.value)
 			if (formDataParam.projectFiles && Array.isArray(formDataParam.projectFiles) && formDataParam.projectFiles.length >= 1) {
 				formDataParam.projectFiles = JSON.stringify(formDataParam.projectFiles)
+			}else{
+				formDataParam.projectFiles = null
 			}
 			ewmProjectApi
 				.ewmProjectSubmitForm(formDataParam, formDataParam.id)

@@ -84,4 +84,8 @@ public class EwmProjectAddParam {
     @Schema(description = "项目验收时间")
     @DateTimeFormat("yyyy-MM-dd")
     private Date projectAcceptTime;
+
+    /** 客户id */
+    @Schema(description = "所属客户")
+    private String clientId;
 }
