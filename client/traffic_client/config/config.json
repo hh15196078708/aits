@@ -1,0 +1,21 @@
+{
+    "server": {
+        "host": "",
+        "port": 443,
+        "protocol": "https"
+    },
+    "client": {
+        "id": "",
+        "name": "",
+        "heartbeat_interval": 60
+    },
+    "logging": {
+        "level": "INFO",
+        "max_size_mb": 5,
+        "backup_count": 5
+    },
+    "buffer": {
+        "max_size_mb": 100,
+        "flush_interval": 30
+    }
+}
