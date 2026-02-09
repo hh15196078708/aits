@@ -1,78 +1,76 @@
-"""
-settings.py - Configuration Management
-Handles reading/writing config.json and in-memory mapping.
-"""
-
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Settings:
-    """Manages runtime configuration loaded from config.json."""
+    _instance = None
 
-    DEFAULT_CONFIG = {
-        "server": {
-            "host": "",
-            "port": 443,
-            "protocol": "https"
-        },
-        "client": {
-            "id": "",
-            "name": "",
-            "heartbeat_interval": 60
-        },
-        "logging": {
-            "level": "INFO",
-            "max_size_mb": 5,
-            "backup_count": 5
-        },
-        "buffer": {
-            "max_size_mb": 100,
-            "flush_interval": 30
-        }
-    }
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(Settings, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
 
-    def __init__(self, config_path: str = None):
-        if config_path is None:
-            config_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "config.json"
-            )
-        self.config_path = config_path
-        self._config = {}
-        self.load()
+    def __init__(self):
+        if self._initialized:
+            return
 
-    def load(self):
-        """Load configuration from config.json."""
-        if os.path.exists(self.config_path):
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                self._config = json.load(f)
-        else:
-            self._config = self.DEFAULT_CONFIG.copy()
-            self.save()
+        # 获取当前脚本所在目录的绝对路径
+        self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.config_path = os.path.join(self.base_dir, 'config.json')
+        self._config = self._load_config()
+        self._initialized = True
 
-    def save(self):
-        """Save current configuration to config.json."""
-        os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            json.dump(self._config, f, indent=4, ensure_ascii=False)
+    def _load_config(self):
+        """加载配置文件"""
+        if not os.path.exists(self.config_path):
+            logger.warning(f"配置文件未找到: {self.config_path}")
+            return {}
 
-    def get(self, key: str, default=None):
-        """Get a config value by dot-separated key (e.g. 'server.host')."""
-        keys = key.split(".")
-        value = self._config
-        for k in keys:
-            if isinstance(value, dict):
-                value = value.get(k)
-            else:
-                return default
-            if value is None:
-                return default
-        return value
+        try:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"加载配置文件出错: {e}")
+            return {}
 
-    def set(self, key: str, value):
-        """Set a config value by dot-separated key."""
-        keys = key.split(".")
-        cfg = self._config
-        for k in keys[:-1]:
-            cfg = cfg.setdefault(k, {})
-        cfg[keys[-1]] = value
+    def save_config(self):
+        """保存配置到文件"""
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(self._config, f, indent=4)
+        except Exception as e:
+            logger.error(f"保存配置文件出错: {e}")
+
+    @property
+    def server_url(self):
+        return self._config.get("server_url", "http://localhost:82")
+
+    @property
+    def project_id(self):
+        return self._config.get("project_id", "")
+
+    @property
+    def client_id(self):
+        return self._config.get("client_id", "")
+
+    @client_id.setter
+    def client_id(self, value):
+        self._config["client_id"] = value
+        self.save_config()
+
+    @property
+    def client_secret(self):
+        return self._config.get("client_secret", "")
+
+    @client_secret.setter
+    def client_secret(self, value):
+        self._config["client_secret"] = value
+        self.save_config()
+
+
+# --- 修改处：将实例重命名为 client_settings ---
+client_settings = Settings()

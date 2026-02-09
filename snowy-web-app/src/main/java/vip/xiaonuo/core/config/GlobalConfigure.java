@@ -197,7 +197,7 @@ public class GlobalConfigure implements WebMvcConfigurer {
             "/iam/id/source/eventCallback/**",
 
             /* 测试接口 */
-            "/safe/test/**",
+            "/safe/init/**",
     };
 
     /**
