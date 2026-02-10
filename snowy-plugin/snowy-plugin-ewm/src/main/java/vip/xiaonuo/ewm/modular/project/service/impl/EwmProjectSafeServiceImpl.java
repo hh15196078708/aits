@@ -3,6 +3,9 @@ package vip.xiaonuo.ewm.modular.project.service.impl;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.RandomUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.crypto.symmetric.SymmetricAlgorithm;
+import cn.hutool.crypto.symmetric.SymmetricCrypto;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
@@ -14,6 +17,7 @@ import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafeAddParam;
 import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafeCheckParam;
 import vip.xiaonuo.ewm.modular.project.service.EwmProjectSafeService;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
@@ -25,6 +29,8 @@ import java.util.Date;
 @Service
 public class EwmProjectSafeServiceImpl extends ServiceImpl<EwmProjectSafeMapper, EwmProjectSafe> implements EwmProjectSafeService {
 
+    private static final String SECRET_KEY = "TrafficClientKey";
+
     @Override
     public CommonResult<EwmProjectSafe> initReg(EwmProjectSafeAddParam ewmProjectSafeAddParam) {
         LambdaQueryWrapper<EwmProjectSafe> queryWrapper = new LambdaQueryWrapper<>();
@@ -33,6 +39,20 @@ public class EwmProjectSafeServiceImpl extends ServiceImpl<EwmProjectSafeMapper,
         EwmProjectSafe safe = this.getOne(queryWrapper);
         if (ObjectUtil.isNotEmpty(safe)) {
             // 2. 如果存在，更新基本信息 (IP, OS, Name, Status)
+            // 初始化 AES 工具 (ECB模式)
+            SymmetricCrypto aes = new SymmetricCrypto(SymmetricAlgorithm.AES, SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+            // 计算当前 MachineCode 理论上应对应的加密 Secret
+            String calculatedSecret = aes.encryptHex(ewmProjectSafeAddParam.getSafeCode());
+
+            String inputSecret = ewmProjectSafeAddParam.getSafeSecret();
+            // 校验逻辑：如果客户端携带了 Secret，必须与计算出的 Secret 一致
+            // (注：如果客户端是全新安装但机器码冲突，inputSecret为空，这里暂放行让其重置，可视业务收紧策略)
+            if (StrUtil.isNotEmpty(inputSecret)) {
+                if (!inputSecret.equalsIgnoreCase(calculatedSecret)) {
+                    return CommonResult.error("终端合规性校验失败：秘钥与机器码不匹配");
+                }
+            }
+
             safe.setSafeName(ewmProjectSafeAddParam.getSafeName());
             safe.setSafeOs(ewmProjectSafeAddParam.getSafeOs());
             safe.setSafeIp(ewmProjectSafeAddParam.getSafeIp());
@@ -48,8 +68,15 @@ public class EwmProjectSafeServiceImpl extends ServiceImpl<EwmProjectSafeMapper,
             newSafe.setSafeOs(ewmProjectSafeAddParam.getSafeOs());
             newSafe.setSafeIp(ewmProjectSafeAddParam.getSafeIp());
 
-            // 生成随机密钥
-            newSafe.setSafeSecret(RandomUtil.randomString(32));
+            // --- 修改核心逻辑：生成基于机器码的加密密钥 ---
+            try {
+                SymmetricCrypto aes = new SymmetricCrypto(SymmetricAlgorithm.AES, SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+                String encryptedSecret = aes.encryptHex(ewmProjectSafeAddParam.getSafeCode());
+                newSafe.setSafeSecret(encryptedSecret);
+
+            } catch (Exception e) {
+                return CommonResult.error("终端注册失败");
+            }
             newSafe.setSafeStatus("ON");
             // 默认授权时间 (可选，根据业务需求，这里默认给一个月或置空由后台审核)
             newSafe.setSafeStartTime(new Date());

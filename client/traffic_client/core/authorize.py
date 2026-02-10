@@ -7,10 +7,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 try:
     from client.traffic_client.utils import hardware_tools, http_client
+    # 引入 LicenseManager 用于校验秘钥合规性
+    from client.traffic_client.utils.crypto_tools import LicenseManager
     from client.traffic_client.config.settings import client_settings
 except ImportError:
     try:
         from utils import hardware_tools, http_client
+        from utils.crypto_tools import LicenseManager
         from config.settings import client_settings
     except ImportError as e:
         logging.error(f"Module import failed: {e}")
@@ -49,6 +52,8 @@ class AuthorizeManager:
             "safeIp": ip_addr,
             "safeOs": os_info,
             "projectId": project_id,
+            # 将本地现有的 Secret 发给服务端（如果是更新注册），供服务端校验
+            "safeSecret": client_settings.client_secret
         }
 
         try:
@@ -66,11 +71,20 @@ class AuthorizeManager:
                 new_client_secret = data.get('safeSecret') or data.get('clientSecret')
 
                 if new_client_id and new_client_secret:
-                    # Update settings
+                    # --- 新增：本地合规性校验 ---
+                    # 收到秘钥后，先验证这个秘钥是否是用我的机器码生成的
+                    if not LicenseManager.verify_license(new_client_secret, machine_code):
+                        logger.error(f"安全警告：服务端返回的秘钥与本机硬件指纹不匹配！(Received: {new_client_secret})")
+                        return False
+
+                    # --- 保存配置 ---
+                    # 赋值操作会自动触发 settings.py 中的 save_config()，写入 config.json
                     client_settings.client_id = new_client_id
                     client_settings.client_secret = new_client_secret
-                    logger.info(f"Registration successful. New ID: {new_client_id}")
+
+                    logger.info(f"注册成功，秘钥校验通过。New ID: {new_client_id}")
                     return True
+
                 logger.warning("Registration successful but returned data is incomplete")
                 return False
             else:
@@ -91,6 +105,7 @@ class AuthorizeManager:
 
         payload = {
             "id": client_settings.client_id,
+            # 心跳检测必须携带 safeSecret，服务端会校验它是否合法
             "safeSecret": client_settings.client_secret,
             "safeCode": hardware_tools.get_machine_code(),
             "projectId": client_settings.project_id
@@ -110,6 +125,7 @@ class AuthorizeManager:
             else:
                 msg = response.get('msg') if isinstance(response, dict) else "Unknown Error"
                 logger.warning(f"Authorization invalid: {msg}, re-registering...")
+                # 授权失效，尝试重新注册
                 return self.authenticate()
         except Exception as e:
             logger.error(f"Auth check exception: {e}")
