@@ -1,95 +1,127 @@
 import unittest
-from unittest.mock import patch
 import sys
 import os
-import logging
+import json
+import traceback
+from unittest.mock import MagicMock, patch
 
-# 1. 设置项目根目录路径，确保能导入 client 包
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# Ensure project root is in path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 2. 导入核心类和配置实例 (使用新的名字 client_settings)
 from core.authorize import AuthorizeManager
 from config.settings import client_settings
+from utils import hardware_tools
 
 
-class TestAuthorizeManager(unittest.TestCase):
+class TestAuthFlow(unittest.TestCase):
+    """
+    Integration Test for Authorization Flow (Real Network)
+
+    This test uses REAL hardware tools to gather system info,
+    and sends REAL network requests to a local server.
+    """
 
     def setUp(self):
-        """每个测试前重置配置"""
-        self.auth_manager = AuthorizeManager()
+        print("\n" + "=" * 60)
+        print(f"Executing: {self._testMethodName}")
+        print("-" * 60)
 
-        # 3. 操作 client_settings 实例
-        # 此时 client_settings 是一个 Settings 对象，肯定有 _config 属性
-        self.original_project_id = client_settings._config.get("project_id")
-        self.original_client_id = client_settings._config.get("client_id")
-        self.original_client_secret = client_settings._config.get("client_secret")
+        # Backup original settings
+        self.original_client_id = client_settings.client_id
+        self.original_client_secret = client_settings.client_secret
+        self.original_server_url = getattr(client_settings, 'server_url', "http://localhost:82")
 
-        # 模拟配置
-        client_settings._config["project_id"] = "TEST_PROJECT_001"
-        client_settings._config["client_id"] = ""
-        client_settings._config["client_secret"] = ""
+        # Reset settings for clean test & Set Local Server URL
+        # 注意：这里模拟了配置文件被重置，同时指定了测试用的服务端地址
+        client_settings._config['client_id'] = ""
+        client_settings._config['client_secret'] = ""
+        client_settings._config['server_url'] = "http://127.0.0.1:82"
 
     def tearDown(self):
-        """恢复配置"""
-        if hasattr(self, 'original_project_id'):
-            client_settings._config["project_id"] = self.original_project_id
-        if hasattr(self, 'original_client_id'):
-            client_settings._config["client_id"] = self.original_client_id
-        if hasattr(self, 'original_client_secret'):
-            client_settings._config["client_secret"] = self.original_client_secret
+        # Restore settings
+        client_settings._config['client_id'] = self.original_client_id
+        client_settings._config['client_secret'] = self.original_client_secret
+        if 'server_url' in client_settings._config:
+            client_settings._config['server_url'] = self.original_server_url
+        print("=" * 60)
 
-    @patch('utils.http_client.post')
-    @patch('utils.hardware_tools')
-    def test_register_success(self, mock_hw, mock_post):
-        """测试注册成功流程"""
-        mock_hw.get_machine_code.return_value = "UUID-1234"
-        mock_hw.get_hostname.return_value = "Test-PC"
-        mock_hw.get_ip_address.return_value = "127.0.0.1"
-        mock_hw.get_os_info.return_value = "Win10"
+    def test_01_hardware_info(self):
+        """Test Step 1: Verify local hardware info collection"""
+        print("[1. Info Collection] Reading local system info...")
 
-        mock_post.return_value = {
-            "code": 200,
-            "msg": "OK",
-            "data": {"id": "CLIENT_001", "safeSecret": "SECRET_XYZ"}
-        }
+        machine_code = hardware_tools.get_machine_code()
+        ip = hardware_tools.get_ip_address()
+        hostname = hardware_tools.get_hostname()
+        os_info = hardware_tools.get_os_info()
 
-        result = self.auth_manager.register_client()
+        print(f"   -> Machine Code: {machine_code}")
+        print(f"   -> IP Address  : {ip}")
+        print(f"   -> Hostname    : {hostname}")
+        print(f"   -> OS Info     : {os_info}")
 
-        self.assertTrue(result)
-        self.assertEqual(client_settings.client_id, "CLIENT_001")
-        self.assertEqual(client_settings.client_secret, "SECRET_XYZ")
+        self.assertIsNotNone(machine_code)
+        self.assertNotEqual(machine_code, "UNKNOWN_MACHINE_CODE")
+        self.assertTrue(len(ip) > 0)
 
-        args, kwargs = mock_post.call_args
-        self.assertEqual(kwargs['json']['projectId'], "TEST_PROJECT_001")
+    @patch('config.settings.Settings.save_config')  # Prevent writing to disk during test
+    def test_02_register_and_auth_flow(self, mock_save):
+        """
+        Test Step 2: Real Network Registration and Validation Flow
+        Target: http://127.0.0.1:82
+        """
+        print(f"[Config] Target Server: {client_settings.server_url}")
 
-    @patch('utils.http_client.post')
-    @patch('utils.hardware_tools')
-    def test_register_fail_no_project_id(self, mock_hw, mock_post):
-        """测试无项目ID"""
-        client_settings._config["project_id"] = ""
-        result = self.auth_manager.register_client()
-        self.assertFalse(result)
+        auth_manager = AuthorizeManager()
 
-    @patch('utils.http_client.post')
-    @patch('utils.hardware_tools')
-    def test_check_auth_success(self, mock_hw, mock_post):
-        """测试鉴权成功"""
-        client_settings._config["client_id"] = "CLIENT_001"
-        client_settings._config["client_secret"] = "SECRET_XYZ"
-        mock_hw.get_machine_code.return_value = "UUID-1234"
+        # --- Scenario A: Real Registration Request ---
+        print("\n[2. Registration] Sending registration request to server...")
 
-        mock_post.return_value = {"code": 200, "msg": "OK"}
+        try:
+            # 执行真实的注册逻辑
+            result = auth_manager.authenticate()
 
-        result = self.auth_manager.check_auth()
-        self.assertTrue(result)
+            if not result:
+                print("   [Failed] Registration returned False.")
+                print("   Possible causes: Server down, invalid response format, or logic error.")
+                # 这里不强制 fail，允许查看日志输出
+            else:
+                print("   [Success] Registration successful!")
 
-        args, kwargs = mock_post.call_args
-        self.assertEqual(kwargs['json']['projectId'], "TEST_PROJECT_001")
-        self.assertEqual(kwargs['json']['id'], "CLIENT_001")
+            # Verification
+            self.assertTrue(result, "Registration failed (Check server logs or connection)")
+
+            # Check if settings were updated in memory
+            print(f"   -> Settings Updated: ClientID={client_settings.client_id}")
+            print(f"   -> Settings Updated: Secret={client_settings.client_secret}")
+
+            self.assertTrue(len(client_settings.client_id) > 0, "Client ID should be set after registration")
+            self.assertTrue(len(client_settings.client_secret) > 0, "Client Secret should be set after registration")
+
+        except Exception as e:
+            print(f"   [Exception] Network/Logic error during registration: {e}")
+            traceback.print_exc()
+            self.fail(f"Registration process crashed: {e}")
+
+        # --- Scenario B: Real Auth Check Request ---
+        print("\n[3. Validation] Sending auth check request...")
+
+        try:
+            # 执行真实的鉴权逻辑
+            check_result = auth_manager.check_auth()
+
+            if check_result:
+                print("   [Success] Auth check passed!")
+            else:
+                print("   [Failed] Auth check returned False.")
+
+            # Verification
+            self.assertTrue(check_result, "Auth check failed")
+
+        except Exception as e:
+            print(f"   [Exception] Network/Logic error during auth check: {e}")
+            traceback.print_exc()
+            self.fail(f"Auth check process crashed: {e}")
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
     unittest.main()

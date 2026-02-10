@@ -1,61 +1,38 @@
 import requests
 import json
-import logging
-from config.settings import client_settings
+from .logger import Logger
 
-logger = logging.getLogger(__name__)
-
-
-def _get_full_url(path):
-    """拼接完整URL"""
-    base_url = client_settings.server_url
-    if base_url.endswith('/'):
-        base_url = base_url[:-1]
-    if not path.startswith('/'):
-        path = '/' + path
-    return f"{base_url}{path}"
+# 初始化日志
+logger = Logger().get_logger()
 
 
-def post(path, data=None, json=None, **kwargs):
-    """
-    发送POST请求
-    :param path: 接口路径，如 /api/login
-    :param data: 表单数据
-    :param json: JSON数据
-    :return: 响应数据的字典或None
-    """
-    url = _get_full_url(path)
-    try:
-        # 设置默认超时时间
-        kwargs.setdefault('timeout', 10)
+class HttpClient:
+    """HTTP请求客户端封装"""
 
-        response = requests.post(url, data=data, json=json, **kwargs)
+    @staticmethod
+    def post(url, data=None, json_data=None, headers=None, timeout=10):
+        """
+        发送POST请求
+        :param url: 请求地址
+        :param data: 表单数据
+        :param json_data: JSON数据
+        :param headers: 请求头
+        :param timeout: 超时时间
+        :return: 响应数据的JSON对象 或 None
+        """
+        try:
+            if headers is None:
+                headers = {'Content-Type': 'application/json'}
 
-        # 尝试解析响应
-        if response.status_code == 200:
-            return response.json()
-        else:
-            logger.error(f"请求失败 [{response.status_code}]: {url} - {response.text}")
+            # 这里是实际的请求逻辑，测试时会被mock掉
+            response = requests.post(url, data=data, json=json_data, headers=headers, timeout=timeout)
+            response.raise_for_status()
+
+            try:
+                return response.json()
+            except json.JSONDecodeError:
+                return response.text
+
+        except Exception as e:
+            logger.error(f"HTTP POST Request failed: {url}, error: {e}")
             return None
-    except Exception as e:
-        logger.error(f"发送POST请求异常: {url} - {e}")
-        return None
-
-
-def get(path, params=None, **kwargs):
-    """
-    发送GET请求
-    """
-    url = _get_full_url(path)
-    try:
-        kwargs.setdefault('timeout', 10)
-        response = requests.get(url, params=params, **kwargs)
-
-        if response.status_code == 200:
-            return response.json()
-        else:
-            logger.error(f"请求失败 [{response.status_code}]: {url}")
-            return None
-    except Exception as e:
-        logger.error(f"发送GET请求异常: {url} - {e}")
-        return None

@@ -2,44 +2,45 @@ import logging
 import sys
 import os
 
-# 确保能找到同级或上级包
+# Ensure peer or parent packages can be found
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 try:
     from client.traffic_client.utils import hardware_tools, http_client
-    # --- 修改处：导入 client_settings ---
     from client.traffic_client.config.settings import client_settings
 except ImportError:
     try:
         from utils import hardware_tools, http_client
         from config.settings import client_settings
     except ImportError as e:
-        logging.error(f"模块导入失败: {e}")
+        logging.error(f"Module import failed: {e}")
         raise e
 
 logger = logging.getLogger(__name__)
 
 
 class AuthorizeManager:
-    """授权管理类"""
+    """Authorization Management Class"""
 
-    def register_client(self):
-        """注册客户端"""
-        # 使用 client_settings
+    def authenticate(self):
+        """Register the client with the server"""
         project_id = client_settings.project_id
         if not project_id:
-            logger.error("注册失败：config.json 未配置 project_id")
+            logger.error("Registration failed: project_id not configured in config.json")
             return False
 
-        logger.info(f"开始注册，项目ID: {project_id}...")
+        logger.info(f"Starting registration, Project ID: {project_id}...")
 
         try:
+            # 1. Collect real machine information
             machine_code = hardware_tools.get_machine_code()
             hostname = hardware_tools.get_hostname()
             ip_addr = hardware_tools.get_ip_address()
             os_info = hardware_tools.get_os_info()
+
+            logger.debug(f"Collected Info - Code: {machine_code}, IP: {ip_addr}")
         except Exception as e:
-            logger.error(f"获取硬件信息失败: {e}")
+            logger.error(f"Failed to collect hardware info: {e}")
             return False
 
         payload = {
@@ -51,36 +52,42 @@ class AuthorizeManager:
         }
 
         try:
-            response = http_client.post("/safe/init/add", json=payload)
+            # Fix: Build full URL using server_url from settings
+            base_url = client_settings.server_url.rstrip('/')
+            url = f"{base_url}/safe/init/add"
 
-            if response and response.get('code') == 200:
+            # Use HttpClient class static method
+            response = http_client.HttpClient.post(url, json_data=payload)
+
+            if response and isinstance(response, dict) and response.get('code') == 200:
                 data = response.get('data', {})
+                # Support different field names that might return from server
                 new_client_id = data.get('id') or data.get('clientId')
                 new_client_secret = data.get('safeSecret') or data.get('clientSecret')
 
                 if new_client_id and new_client_secret:
-                    # 使用 client_settings 保存
+                    # Update settings
                     client_settings.client_id = new_client_id
                     client_settings.client_secret = new_client_secret
-                    logger.info(f"注册成功 ID: {new_client_id}")
+                    logger.info(f"Registration successful. New ID: {new_client_id}")
                     return True
+                logger.warning("Registration successful but returned data is incomplete")
                 return False
             else:
-                msg = response.get('msg') if response else "未知错误"
-                logger.error(f"注册失败: {msg}")
+                msg = response.get('msg') if isinstance(response, dict) else "Unknown Error"
+                logger.error(f"Registration refused by server: {msg}")
                 return False
         except Exception as e:
-            logger.error(f"注册异常: {e}")
+            logger.error(f"Registration exception: {e}")
             return False
 
     def check_auth(self):
-        """检查授权"""
-        # 使用 client_settings
+        """Check if current authorization is valid"""
         if not client_settings.client_id or not client_settings.client_secret:
-            logger.warning("无凭证，准备注册...")
-            return self.register_client()
+            logger.warning("No credentials found, attempting to register...")
+            return self.authenticate()
 
-        logger.info(f"检查授权 (ID: {client_settings.client_id})...")
+        logger.info(f"Checking authorization (ID: {client_settings.client_id})...")
 
         payload = {
             "id": client_settings.client_id,
@@ -90,15 +97,20 @@ class AuthorizeManager:
         }
 
         try:
-            response = http_client.post("/safe/init/check", json=payload)
+            # Fix: Build full URL using server_url from settings
+            base_url = client_settings.server_url.rstrip('/')
+            url = f"{base_url}/safe/init/check"
 
-            if response and response.get('code') == 200:
-                logger.info("授权有效")
+            # Use HttpClient class static method
+            response = http_client.HttpClient.post(url, json_data=payload)
+
+            if response and isinstance(response, dict) and response.get('code') == 200:
+                logger.info("Authorization is valid")
                 return True
             else:
-                msg = response.get('msg') if response else "未知错误"
-                logger.warning(f"授权失效: {msg}，重新注册...")
-                return self.register_client()
+                msg = response.get('msg') if isinstance(response, dict) else "Unknown Error"
+                logger.warning(f"Authorization invalid: {msg}, re-registering...")
+                return self.authenticate()
         except Exception as e:
-            logger.error(f"鉴权异常: {e}")
+            logger.error(f"Auth check exception: {e}")
             return False
