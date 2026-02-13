@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 @模块名称: 服务自启动管理 (core/service_manager.py)
-@功能描述: 
+@功能描述:
     1. Windows: 实现 pywin32 服务类，处理 Start/Stop/SvcDoRun 逻辑。
     2. Linux: 生成 .service 文件并调用 systemctl 命令进行注册。
 @性能约束: 服务轮询间隔需配合CPU占用要求。
@@ -65,7 +65,7 @@ if SystemUtils.is_windows():
             """
             project_root = SystemUtils.get_root_path()
             os.chdir(project_root)
-            
+
             # --- 模拟启动主程序 ---
             # 实际集成时，这里会 import client_main 并调用 client_main.run()
             # 为了防止服务脚本报错导致系统服务崩溃，必须包裹 Try-Catch
@@ -74,17 +74,17 @@ if SystemUtils.is_windows():
                 # from client_main import ClientApp
                 # app = ClientApp()
                 # app.start()
-                
+
                 # 占位符：保持服务运行
                 while self.is_alive:
                     # 检查停止信号，超时时间即为循环间隔
                     rc = win32event.WaitForSingleObject(self.hWaitStop, 3000) # 3秒心跳
                     if rc == win32event.WAIT_OBJECT_0:
                         break
-                    
+
                     # 这里执行周期性检查任务
                     pass
-                    
+
             except Exception as e:
                 servicemanager.LogErrorMsg(f"Service Exception: {str(e)}")
 
@@ -98,10 +98,10 @@ class LinuxServiceManager:
     @staticmethod
     def generate_service_file(python_path: str, script_path: str):
         """生成 systemd 配置文件内容"""
-        
+
         # 必须使用绝对路径
         work_dir = str(Path(script_path).parent)
-        
+
         content = f"""[Unit]
 Description=Traffic Analysis Client Service
 After=network.target network-online.target
@@ -139,17 +139,17 @@ WantedBy=multi-user.target
 
         print(f"Creating service file at: {service_file_path}")
         content = LinuxServiceManager.generate_service_file(python_exec, main_script)
-        
+
         try:
             with open(service_file_path, 'w') as f:
                 f.write(content)
-            
+
             # 重新加载配置并启动
             SystemUtils.execute_cmd("systemctl daemon-reload")
             SystemUtils.execute_cmd(f"systemctl enable {LinuxServiceManager.SERVICE_NAME}")
             SystemUtils.execute_cmd(f"systemctl start {LinuxServiceManager.SERVICE_NAME}")
             print("Service installed and started successfully.")
-            
+
         except PermissionError:
             print("Error: Permission denied. Please run as root (sudo).")
         except Exception as e:
@@ -161,12 +161,12 @@ WantedBy=multi-user.target
         try:
             SystemUtils.execute_cmd(f"systemctl stop {LinuxServiceManager.SERVICE_NAME}")
             SystemUtils.execute_cmd(f"systemctl disable {LinuxServiceManager.SERVICE_NAME}")
-            
+
             service_file_path = os.path.join(LinuxServiceManager.SYSTEMD_PATH, LinuxServiceManager.SERVICE_NAME)
             if os.path.exists(service_file_path):
                 os.remove(service_file_path)
                 print("Service file removed.")
-            
+
             SystemUtils.execute_cmd("systemctl daemon-reload")
             print("Service uninstalled successfully.")
         except Exception as e:
@@ -200,3 +200,5 @@ if __name__ == "__main__":
             print(out)
         else:
             print("Unknown command for Linux. Use: install, remove, start, stop, status")
+
+

@@ -50,6 +50,11 @@ class Settings:
         return self._config.get("server_url", "http://localhost:82")
 
     @property
+    def heartbeat_interval(self):
+        """获取心跳间隔，默认为 5 秒"""
+        return self._config.get("heartbeat_interval", 5)
+
+    @property
     def project_id(self):
         return self._config.get("project_id", "")
 

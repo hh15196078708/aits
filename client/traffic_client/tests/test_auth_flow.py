@@ -92,6 +92,9 @@ class TestAuthFlow(unittest.TestCase):
                 print("!" * 70 + "\n")
             else:
                 print("   [Success] Registration successful!")
+                # tests/test_auth_flow.py
+                # 在 line 97: self.assertTrue(is_registered, ...) 之前添加：
+            print(f"Debug: Registration result is {is_registered}. Check logs for backend response.")
 
             # 断言注册成功
             self.assertTrue(is_registered, "Registration failed (See troubleshooting hints above)")
