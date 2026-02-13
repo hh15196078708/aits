@@ -411,6 +411,7 @@ class ClientApplication:
         
         # 发送心跳
         success, auth_status, error = network_client.heartbeat(
+            client_id=self._client_id,
             machine_code=self._machine_code,
             auth_key=self._auth_key,
             heartbeat_data=heartbeat_data

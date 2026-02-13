@@ -30,4 +30,7 @@ public class EwmProjectSafeCheckParam {
     @Schema(description = "机器码")
     @NotBlank(message = "safeCode不能为空")
     private String safeCode;
+
+
+
 }

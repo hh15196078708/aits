@@ -1,7 +1,0 @@
-{
-    "server_url": "http://localhost:82",
-    "project_id": "2020777979054948354",
-    "client_id": "CLIENT_001",
-    "client_secret": "SECRET_XYZ",
-    "heartbeat_interval": 5
-}
