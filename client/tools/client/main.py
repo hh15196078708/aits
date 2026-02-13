@@ -405,6 +405,7 @@ class ClientApplication:
         """
         # 采集心跳数据
         heartbeat_data = hardware_collector.get_heartbeat_data()
+        collector = HardwareCollector()
         
         logger.debug(f"CPU使用率: {heartbeat_data['cpu']['usage_percent']}%")
         logger.debug(f"内存使用率: {heartbeat_data['memory']['usage_percent']}%")
