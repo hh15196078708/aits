@@ -95,6 +95,8 @@
 				</template>
 				<template v-if="column.dataIndex === 'action'">
 					<a-space>
+						<a @click="handleMonitor(record)">监控</a>
+						<a-divider type="vertical" v-if="hasPerm(['ewmProjectEdit', 'ewmProjectDelete'], 'and')" />
 						<a @click="formRef.onOpen(record)" v-if="hasPerm('ewmProjectEdit')">编辑</a>
 						<a-divider type="vertical" v-if="hasPerm(['ewmProjectEdit', 'ewmProjectDelete'], 'and')" />
 						<a-popconfirm title="确定要删除吗？" @confirm="deleteEwmProject(record)">
@@ -119,6 +121,8 @@ import ewmClientApi from '@/api/ewm/ewmClientApi'
 const searchFormState = ref({})
 const searchFormRef = ref()
 const tableRef = ref()
+import {useRouter} from "vue-router";
+const router = useRouter()
 const importModelRef = ref()
 const formRef = ref()
 // 客户列表数据
@@ -199,6 +203,8 @@ const loadData = (parameter) => {
 onMounted(() => {
 	loadClientList()
 })
+// 监控跳转逻辑
+
 // 重置
 const reset = () => {
 	searchFormRef.value.resetFields()

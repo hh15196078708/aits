@@ -55,6 +55,7 @@
 				</template>
 				<template v-if="column.key === 'action'">
 					<a-space>
+
 						<a @click="formRef.onOpen(record)" v-if="hasPerm('ewmClientEdit')">编辑</a>
 						<a-divider type="vertical" v-if="hasPerm(['ewmClientEdit', 'ewmClientDelete'], 'and')"/>
 						<a-popconfirm title="确定要删除此客户吗？" @confirm="deleteEwmClient(record)">

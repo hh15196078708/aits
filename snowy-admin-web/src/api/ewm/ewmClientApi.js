@@ -24,5 +24,7 @@ export default {
 	// 获取客户详情
 	ewmClientDetail(data) {
 		return request('detail', data, 'get')
-	}
+	},
+
+
 }

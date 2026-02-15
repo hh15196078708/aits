@@ -2,21 +2,24 @@ package vip.xiaonuo.ewm.modular.project.service.impl;
 
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.ObjectUtil;
-import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.symmetric.SymmetricAlgorithm;
 import cn.hutool.crypto.symmetric.SymmetricCrypto;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import vip.xiaonuo.common.exception.CommonException;
 import vip.xiaonuo.common.pojo.CommonResult;
+import vip.xiaonuo.ewm.modular.project.entity.EwmProjectList;
 import vip.xiaonuo.ewm.modular.project.entity.EwmProjectSafe;
+import vip.xiaonuo.ewm.modular.project.entity.EwmProjectSafeList;
 import vip.xiaonuo.ewm.modular.project.entity.SafeHardware;
 import vip.xiaonuo.ewm.modular.project.mapper.EwmProjectSafeMapper;
 import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafeAddParam;
 import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafeCheckParam;
+import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafePageParam;
 import vip.xiaonuo.ewm.modular.project.service.EwmProjectSafeService;
 import vip.xiaonuo.ewm.modular.project.service.SafeHardwareService;
 
@@ -36,6 +39,15 @@ public class EwmProjectSafeServiceImpl extends ServiceImpl<EwmProjectSafeMapper,
 
     @Autowired
     private SafeHardwareService safeHardwareService;
+
+    @Autowired
+    private EwmProjectSafeMapper ewmProjectSafeMapper;
+
+    @Override
+    public Page<EwmProjectSafeList> page(EwmProjectSafePageParam ewmProjectSafePageParam) {
+        Page<EwmProjectSafeList> page = new Page<>(ewmProjectSafePageParam.getCurrent(), ewmProjectSafePageParam.getSize());
+        return (Page<EwmProjectSafeList>) ewmProjectSafeMapper.selectEwmProjectSafeList(page, ewmProjectSafePageParam);
+    }
 
     @Override
     public CommonResult<EwmProjectSafe> initReg(EwmProjectSafeAddParam ewmProjectSafeAddParam) {
@@ -138,6 +150,7 @@ public class EwmProjectSafeServiceImpl extends ServiceImpl<EwmProjectSafeMapper,
         SafeHardware safeHardware = new SafeHardware();
         safeHardware.setSafeId(safe.getId());
         safeHardware.setSafeCpu(ewmProjectSafeCheckParam.getSafeCpu());
+        safeHardware.setProjectId(safe.getProjectId());
         safeHardware.setSafeCpuUsage(ewmProjectSafeCheckParam.getSafeCpuUsage());
         safeHardware.setSafeMemory(ewmProjectSafeCheckParam.getSafeMemory());
         safeHardware.setSafeMemoryUsage(ewmProjectSafeCheckParam.getSafeMemoryUsage());
@@ -146,6 +159,7 @@ public class EwmProjectSafeServiceImpl extends ServiceImpl<EwmProjectSafeMapper,
         safeHardware.setCreateTime(new Date());
         safeHardware.setSafeOs(safe.getSafeOs());
         safeHardware.setSafeIp(safe.getSafeIp());
+        safeHardware.setSafeName(safe.getSafeName());
         safeHardwareService.save(safeHardware);
         return CommonResult.ok("终端授权有效");
     }

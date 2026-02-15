@@ -17,8 +17,10 @@ import org.springframework.web.bind.annotation.RestController;
 import vip.xiaonuo.common.annotation.CommonLog;
 import vip.xiaonuo.common.pojo.CommonResult;
 import vip.xiaonuo.ewm.modular.project.entity.EwmClient;
+import vip.xiaonuo.ewm.modular.project.entity.SafeHardware;
 import vip.xiaonuo.ewm.modular.project.param.*;
 import vip.xiaonuo.ewm.modular.project.service.EwmClientService;
+import vip.xiaonuo.ewm.modular.project.service.SafeHardwareService;
 
 import java.util.List;
 
@@ -29,6 +31,8 @@ import java.util.List;
 public class EwmClientController {
     @Resource
     private EwmClientService ewmClientService;
+
+
 
     /**
      * 获取项目表分页
@@ -95,4 +99,6 @@ public class EwmClientController {
     public CommonResult<EwmClient> detail(@Valid EwmClientIdParam ewmClientIdParam) {
         return CommonResult.data(ewmClientService.detail(ewmClientIdParam));
     }
+
+
 }

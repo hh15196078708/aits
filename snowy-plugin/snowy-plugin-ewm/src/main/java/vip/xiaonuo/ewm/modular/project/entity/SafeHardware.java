@@ -1,5 +1,7 @@
 package vip.xiaonuo.ewm.modular.project.entity;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -16,6 +18,9 @@ public class SafeHardware {
 
     @Field("safe_id")
     private String safeId;
+
+    @Field("project_id")
+    private String projectId;
 
     @Field("safe_cpu")
     private String safeCpu;
@@ -41,6 +46,7 @@ public class SafeHardware {
     private String safeDiskUsage;
 
     @Field("create_time")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date createTime;
 
     @Field("safe_os")
@@ -48,4 +54,7 @@ public class SafeHardware {
 
     @Field("safe_ip")
     private String safeIp;
+
+    @Field("safe_name")
+    private String safeName;
 }

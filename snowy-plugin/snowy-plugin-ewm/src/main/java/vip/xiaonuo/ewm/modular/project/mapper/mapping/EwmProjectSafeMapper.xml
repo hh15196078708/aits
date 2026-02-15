@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="vip.xiaonuo.ewm.modular.project.mapper.EwmProjectSafeMapper">
-
+    <select id="selectEwmProjectSafeList" parameterType="vip.xiaonuo.ewm.modular.project.param.EwmProjectSafePageParam"
+            resultType="vip.xiaonuo.ewm.modular.project.entity.EwmProjectSafeList">
+        select a.id,a.create_time,a.project_id,a.safe_name,a.safe_code,a.safe_os,a.safe_ip,a.safe_status,a.safe_start_time,a.safe_end_time,a.safe_cpu,a.safe_cpu_usage,a.safe_memory,a.safe_memory_usage,a.safe_disk,a.safe_disk_usage,
+               b.project_name
+        from ewm_project_safe a
+        left join ewm_project b on a.project_id = b.id
+        <where>
+            and a.delete_flag = 'NOT_DELETE'
+            <if test="ewmProjectSafePageParam.projectId != null and ewmProjectSafePageParam.projectId !=''">
+                and a.project_id = #{ewmProjectSafePageParam.projectId}
+            </if>
+            <if test="ewmProjectSafePageParam.safeIp != null and ewmProjectSafePageParam.safeIp != ''">
+                and a.safe_ip like concat('%',#{ewmProjectSafePageParam.safeIp},'%')
+            </if>
+        </where>
+        order by a.create_time desc
+    </select>
 </mapper>
