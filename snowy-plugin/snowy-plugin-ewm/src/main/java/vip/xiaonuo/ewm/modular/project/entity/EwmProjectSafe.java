@@ -81,4 +81,19 @@ public class EwmProjectSafe {
     /** 授权结束时间 */
     @Schema(description = "授权结束时间")
     private Date safeEndTime;
+
+    private String safeCpu;
+
+    //SAFE_CPU_USAGE
+    private String safeCpuUsage;
+
+    //SAFE_MEMORY
+    private String safeMemory;
+
+    private String safeMemoryUsage;
+
+    private String safeDisk;
+
+    //SAFE_DISK_USAGE
+    private String safeDiskUsage;
 }

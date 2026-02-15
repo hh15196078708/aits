@@ -8,14 +8,17 @@ import cn.hutool.crypto.symmetric.SymmetricAlgorithm;
 import cn.hutool.crypto.symmetric.SymmetricCrypto;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import vip.xiaonuo.common.exception.CommonException;
 import vip.xiaonuo.common.pojo.CommonResult;
 import vip.xiaonuo.ewm.modular.project.entity.EwmProjectSafe;
+import vip.xiaonuo.ewm.modular.project.entity.SafeHardware;
 import vip.xiaonuo.ewm.modular.project.mapper.EwmProjectSafeMapper;
 import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafeAddParam;
 import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafeCheckParam;
 import vip.xiaonuo.ewm.modular.project.service.EwmProjectSafeService;
+import vip.xiaonuo.ewm.modular.project.service.SafeHardwareService;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
@@ -30,6 +33,9 @@ import java.util.Date;
 public class EwmProjectSafeServiceImpl extends ServiceImpl<EwmProjectSafeMapper, EwmProjectSafe> implements EwmProjectSafeService {
 
     private static final String SECRET_KEY = "TrafficClientKey";
+
+    @Autowired
+    private SafeHardwareService safeHardwareService;
 
     @Override
     public CommonResult<EwmProjectSafe> initReg(EwmProjectSafeAddParam ewmProjectSafeAddParam) {
@@ -121,7 +127,26 @@ public class EwmProjectSafeServiceImpl extends ServiceImpl<EwmProjectSafeMapper,
         // 6. 更新在线状态 (可选：这里可以做心跳逻辑，刷新最后活跃时间等)
         safe.setSafeStatus("ON");
         safe.setUpdateTime(new Date());
+        safe.setSafeCpu(ewmProjectSafeCheckParam.getSafeCpu());
+        safe.setSafeCpuUsage(ewmProjectSafeCheckParam.getSafeCpuUsage());
+        safe.setSafeMemory(ewmProjectSafeCheckParam.getSafeMemory());
+        safe.setSafeMemoryUsage(ewmProjectSafeCheckParam.getSafeMemoryUsage());
+        safe.setSafeDisk(ewmProjectSafeCheckParam.getSafeDisk());
+        safe.setSafeDiskUsage(ewmProjectSafeCheckParam.getSafeDiskUsage());
         this.updateById(safe);
+        //更新到MongoDB
+        SafeHardware safeHardware = new SafeHardware();
+        safeHardware.setSafeId(safe.getId());
+        safeHardware.setSafeCpu(ewmProjectSafeCheckParam.getSafeCpu());
+        safeHardware.setSafeCpuUsage(ewmProjectSafeCheckParam.getSafeCpuUsage());
+        safeHardware.setSafeMemory(ewmProjectSafeCheckParam.getSafeMemory());
+        safeHardware.setSafeMemoryUsage(ewmProjectSafeCheckParam.getSafeMemoryUsage());
+        safeHardware.setSafeDisk(ewmProjectSafeCheckParam.getSafeDisk());
+        safeHardware.setSafeDiskUsage(ewmProjectSafeCheckParam.getSafeDiskUsage());
+        safeHardware.setCreateTime(new Date());
+        safeHardware.setSafeOs(safe.getSafeOs());
+        safeHardware.setSafeIp(safe.getSafeIp());
+        safeHardwareService.save(safeHardware);
         return CommonResult.ok("终端授权有效");
     }
 }

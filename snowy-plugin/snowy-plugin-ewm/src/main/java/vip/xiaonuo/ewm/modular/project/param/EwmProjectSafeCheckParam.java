@@ -31,6 +31,28 @@ public class EwmProjectSafeCheckParam {
     @NotBlank(message = "safeCode不能为空")
     private String safeCode;
 
+    @Schema(description = "CPU")
+    private String safeCpu;
+
+    //SAFE_CPU_USAGE
+    @Schema(description = "CPU使用率")
+    private String safeCpuUsage;
+
+    //SAFE_MEMORY
+    @Schema(description = "内存")
+    private String safeMemory;
+
+    //SAFE_MEMORY_USAGE
+    @Schema(description = "内存使用率")
+    private String safeMemoryUsage;
+
+    @Schema(description = "硬盘")
+    private String safeDisk;
+
+    //SAFE_DISK_USAGE
+    @Schema(description = "硬盘使用率")
+    private String safeDiskUsage;
+
 
 
 }

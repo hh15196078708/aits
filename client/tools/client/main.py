@@ -389,6 +389,7 @@ class ClientApplication:
                 resource_monitor.throttle_if_needed()
                 resource_monitor.gc_if_needed()
             except Exception as e:
+                print(e)
                 logger.error(f"心跳异常: {e}")
             
             # 等待下一次心跳（非阻塞）
@@ -404,12 +405,9 @@ class ClientApplication:
         异常情况: 网络失败时启动离线计时器
         """
         # 采集心跳数据
-        heartbeat_data = hardware_collector.get_heartbeat_data()
-        collector = HardwareCollector()
-        
-        logger.debug(f"CPU使用率: {heartbeat_data['cpu']['usage_percent']}%")
-        logger.debug(f"内存使用率: {heartbeat_data['memory']['usage_percent']}%")
-        
+        heartbeat_data = hardware_collector.collect_all()
+        print(heartbeat_data)
+        print("==============")
         # 发送心跳
         success, auth_status, error = network_client.heartbeat(
             client_id=self._client_id,

@@ -368,13 +368,13 @@ class NetworkClient:
             "safeSecret": auth_key,  # 授权密钥
             "safeStatus": "ON",  # 状态：在线
             # 心跳数据
-            "osInfo": heartbeat_data.get("os_info", {}),
-            "cpu_config": heartbeat_data.get("cpu_config", {}),  # CPU配置
-            "cpu_usage": heartbeat_data.get("cpu_usage", 0.0),  # CPU占有率 (%)
-            "memory_size": heartbeat_data.get("memory_size", 0.0),  # 内存大小 (GB)
-            "memory_usage": heartbeat_data.get("memory_usage", 0.0),  # 内存占有率 (%)
-            "disk_size": heartbeat_data.get("disk_size", 0.0),  # 硬盘大小 (GB)
-            "disk_usage": heartbeat_data.get("disk_usage", 0.0),  # 硬盘使用率 (%)
+            "safeOs": heartbeat_data.get("os_info", {}),
+            "safeCpu": heartbeat_data.get("cpu_config", {}),  # CPU配置
+            "safeCpuUsage": heartbeat_data.get("cpu_usage", 0.0),  # CPU占有率 (%)
+            "safeMemory": heartbeat_data.get("memory_size", 0.0),  # 内存大小 (GB)
+            "safeMemoryUsage": heartbeat_data.get("memory_usage", 0.0),  # 内存占有率 (%)
+            "safeDisk": heartbeat_data.get("disk_size", 0.0),  # 硬盘大小 (GB)
+            "safeDiskUsage": heartbeat_data.get("disk_usage", 0.0),  # 硬盘使用率 (%)
         }
         
         # 构建请求URL
