@@ -18,7 +18,7 @@
 
 import json  # JSON序列化
 import time  # 时间相关
-from typing import Dict, Optional, Tuple  # 类型提示
+from typing import Dict, List, Optional, Tuple  # 类型提示
 from urllib.request import Request, urlopen  # 标准库HTTP客户端
 from urllib.error import URLError, HTTPError  # URL错误类型
 
@@ -27,6 +27,7 @@ from constants import (
     SERVER_URL,  # 服务端地址
     REGISTER_ENDPOINT,  # 注册接口
     HEARTBEAT_ENDPOINT,  # 心跳接口
+    ATTACK_LOG_UPLOAD_ENDPOINT,  # 攻击日志上报接口
     REQUEST_TIMEOUT,  # 请求超时
     MAX_RETRY,  # 最大重试次数
     RETRY_INTERVAL,  # 重试间隔
@@ -409,7 +410,7 @@ class NetworkClient:
         except Exception as e:
             return False, "", f"响应解析失败: {str(e)}"
     
-    def update_info(self, machine_code: str, machine_name: str, 
+    def update_info(self, client_id: str, machine_code: str, machine_name: str,
                     ip_info: Dict, os_info: Dict) -> Tuple[bool, str]:
         """
         更新机器信息（非首次运行）
@@ -434,6 +435,7 @@ class NetworkClient:
         # 构建请求数据（匹配ewm_project_safe表字段）
         request_data = {
             "projectId": PROJECT_ID,  # 项目ID
+            "id": client_id,  # 客户端ID（服务端分配的唯一标识）
             "safeCode": machine_code,  # 机器码
             "safeName": machine_name,  # 机器名称
             "safeOs": os_str.strip(),  # 操作系统
@@ -460,6 +462,65 @@ class NetworkClient:
         except Exception as e:
             return False, f"响应解析失败: {str(e)}"
     
+    def upload_attack_logs(self, client_id: str,events: List[dict]) -> Tuple[bool, str]:
+        """
+        批量上报攻击检测日志
+
+        功能: 将检测到的攻击事件（端口扫描等）上报至服务端
+        参数:
+            events: 攻击事件字典列表，每个元素由各检测器的 to_dict() 生成
+        返回值: (成功标志, 错误信息)
+        异常情况: 网络失败时返回错误信息，由调用方决定是否重试
+
+        请求格式:
+        {
+            "projectId": "项目ID",
+            "logs": [
+                {
+                    "attack_type": "port_scan",
+                    "source_ip": "1.2.3.4",
+                    "port_count": 35,
+                    "scan_type": "syn_scan",
+                    "level": "high",
+                    "detection_method": "packet",
+                    "start_time": 1700000000.0,
+                    "end_time": 1700000010.0,
+                    "target_ports": [22, 80, 443, ...]
+                },
+                ...
+            ]
+        }
+        """
+        if not events:
+            return True, ""
+
+        request_data = {
+            "projectId": PROJECT_ID,
+            "clientId":client_id,
+            "logs": events,
+        }
+
+        url = f"{self._server_url}{ATTACK_LOG_UPLOAD_ENDPOINT}"
+
+        print(request_data)
+        print(url)
+        print("======================")
+
+        # 上报日志使用单次请求（不重试，由上层负责重试逻辑）
+        success, resp_data, error = self._make_request(url, request_data)
+
+        if not success:
+            return False, error
+
+        try:
+            code = resp_data.get("code") if resp_data else None
+            if code in (200, RESPONSE_CODE_SUCCESS):
+                return True, ""
+            msg = (resp_data or {}).get("msg") or (resp_data or {}).get("message", "未知错误")
+            return False, f"服务端拒绝: {msg}"
+        except Exception as e:
+            return False, f"响应解析失败: {e}"
+
     def check_connection(self) -> Tuple[bool, str]:
         """
         检查网络连接
@@ -481,10 +542,12 @@ class NetworkClient:
         except Exception as e:
             return False, str(e)
     
+
+
     def close(self) -> None:
         """
         关闭网络客户端
-        
+
         功能: 释放网络资源
         参数: 无
         返回值: 无
@@ -499,3 +562,5 @@ class NetworkClient:
 
 # 创建全局网络客户端实例
 network_client = NetworkClient()
+
+

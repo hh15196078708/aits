@@ -155,3 +155,73 @@ RESPONSE_CODE_INVALID_MACHINE = 1002  # 无效的机器码
 RESPONSE_CODE_SERVER_ERROR = 5000  # 服务端内部错误
 
 PROJECT_ID="2023031623403520002"
+
+# =============================================================================
+# 攻击识别与特征库管理配置
+# =============================================================================
+
+# 特征库同步配置
+RULE_LIB_SYNC_INTERVAL = 600  # 特征库主动拉取间隔，单位：秒（10分钟）
+RULE_LIB_VERSION_ENDPOINT = "/attack/rule/version"  # 特征库版本查询接口
+RULE_LIB_UPDATE_ENDPOINT = "/attack/rule/update"  # 特征库增量更新接口
+RULE_LIB_FILE_PATH = "data/rule_lib.json"  # 特征库本地存储路径
+RULE_LIB_BACKUP_PATH = "data/rule_lib.backup.json"  # 特征库备份路径
+
+# 攻击日志上传配置
+ATTACK_LOG_UPLOAD_ENDPOINT = "/attack/portscan"  # 攻击日志上传接口
+ATTACK_LOG_BATCH_SIZE = 50  # 批量上传日志数量
+ATTACK_LOG_UPLOAD_INTERVAL = 30  # 日志上传间隔，单位：秒
+
+# 攻击识别异常上报配置
+ATTACK_DETECTOR_STATUS_ENDPOINT = "/attack/detector/status"  # 识别模块状态上报接口
+ATTACK_DETECTOR_RESTART_DELAY = 3  # 模块异常后重启延迟，单位：秒
+ATTACK_DETECTOR_MAX_RESTART = 10  # 最大重启次数
+
+# 阈值配置下发接口
+ATTACK_THRESHOLD_ENDPOINT = "/attack/threshold/get"  # 阈值配置获取接口
+
+# 攻击类型定义
+ATTACK_TYPE_DDOS_SYN = "ddos_syn_flood"  # SYN Flood攻击
+ATTACK_TYPE_DDOS_UDP = "ddos_udp_flood"  # UDP Flood攻击
+ATTACK_TYPE_DDOS_ICMP = "ddos_icmp_flood"  # ICMP Flood攻击
+ATTACK_TYPE_BRUTE_FORCE = "brute_force"  # 暴力破解
+ATTACK_TYPE_PORT_SCAN = "port_scan"  # 端口扫描
+ATTACK_TYPE_SQL_INJECTION = "sql_injection"  # SQL注入
+ATTACK_TYPE_XSS = "xss_attempt"  # XSS攻击
+ATTACK_TYPE_TRAFFIC_BURST = "traffic_burst"  # 异常流量突发
+ATTACK_TYPE_MALWARE_C2 = "malware_c2"  # 恶意软件外联
+
+# 攻击等级定义
+ATTACK_LEVEL_HIGH = "high"  # 高危
+ATTACK_LEVEL_MEDIUM = "medium"  # 中危
+ATTACK_LEVEL_LOW = "low"  # 低危
+
+# 攻击识别默认阈值
+DEFAULT_THRESHOLDS = {
+    # DDoS攻击阈值
+    "ddos_syn_connections": 1000,  # SYN连接数阈值
+    "ddos_udp_pps": 10000,  # UDP包速率阈值（包/秒）
+    "ddos_icmp_pps": 5000,  # ICMP包速率阈值（包/秒）
+    "ddos_traffic_mbps": 100,  # 流量峰值阈值（MB/s）
+
+    # 暴力破解阈值
+    "brute_force_fail_count": 5,  # 失败次数阈值
+    "brute_force_time_window": 60,  # 时间窗口（秒）
+
+    # 端口扫描阈值
+    "port_scan_port_count": 20,  # 扫描端口数量阈值
+    "port_scan_time_window": 10,  # 时间窗口（秒）
+
+    # 异常流量突发阈值
+    "traffic_burst_baseline_multiplier": 2.0,  # 基线倍数（200%）
+    "traffic_baseline_window": 600,  # 基线统计窗口（秒，10分钟）
+}
+
+# 流量采集配置
+TRAFFIC_QUEUE_MAX_SIZE = 10000  # 流量数据队列最大长度
+TRAFFIC_COLLECT_INTERVAL = 0.1  # 流量采集间隔，单位：秒
+TRAFFIC_BASELINE_SAMPLES = 100  # 基线统计样本数量
+
+# 性能要求
+ATTACK_DETECTION_FALSE_POSITIVE_RATE = 0.03  # 误报率上限：3%
+ATTACK_DETECTION_FALSE_NEGATIVE_RATE = 0.005  # 漏报率上限：0.5%

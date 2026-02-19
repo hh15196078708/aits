@@ -37,6 +37,8 @@ from hardware_collector import hardware_collector  # 硬件采集器
 from network_client import network_client  # 网络客户端
 from auth_manager import auth_manager  # 授权管理器
 from resource_monitor import resource_monitor  # 资源监控器
+from traffic_collector import traffic_collector  # 流量采集器
+
 
 
 class ClientApplication:
@@ -97,11 +99,14 @@ class ClientApplication:
             
             # 步骤6：启动资源监控
             resource_monitor.start()
-            
-            # 步骤7：启动心跳
+
+            # 步骤7：启动流量采集与攻击检测（端口扫描等）
+            traffic_collector.start()
+
+            # 步骤8：启动心跳
             self._start_heartbeat()
-            
-            # 步骤8：主循环等待
+
+            # 步骤9：主循环等待
             self._main_loop()
             
             return 0
@@ -293,6 +298,7 @@ class ClientApplication:
             network_client.set_auth_key(self._auth_key)
         
         success, error = network_client.update_info(
+            client_id=self._client_id,
             machine_code=reg_data["machine_code"],
             machine_name=reg_data["machine_name"],
             ip_info=reg_data["ip_info"],
@@ -336,10 +342,12 @@ class ClientApplication:
         if hasattr(signal, 'SIGHUP'):
             signal.signal(signal.SIGHUP, signal_handler)
     
+
+
     def _start_heartbeat(self) -> None:
         """
         启动心跳线程
-        
+
         功能: 创建并启动心跳发送线程
         参数: 无
         返回值: 无
@@ -406,8 +414,6 @@ class ClientApplication:
         """
         # 采集心跳数据
         heartbeat_data = hardware_collector.collect_all()
-        print(heartbeat_data)
-        print("==============")
         # 发送心跳
         success, auth_status, error = network_client.heartbeat(
             client_id=self._client_id,
@@ -452,34 +458,40 @@ class ClientApplication:
     def _shutdown(self) -> None:
         """
         优雅退出
-        
+
         功能: 关闭所有资源和线程
         参数: 无
         返回值: 无
         异常情况: 无
         """
         logger.info("正在关闭客户端...")
-        
+
         # 设置停止标志
         self._running = False
         self._stop_event.set()
-        
+
         # 停止资源监控
         try:
             resource_monitor.stop()
         except Exception:
             pass
-        
+
+        # 停止流量采集与攻击检测
+        try:
+            traffic_collector.stop()
+        except Exception:
+            pass
+
         # 等待心跳线程结束
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
             self._heartbeat_thread.join(timeout=2)
-        
+
         # 关闭网络客户端
         try:
             network_client.close()
         except Exception:
             pass
-        
+
         logger.info("客户端已关闭")
 
 
