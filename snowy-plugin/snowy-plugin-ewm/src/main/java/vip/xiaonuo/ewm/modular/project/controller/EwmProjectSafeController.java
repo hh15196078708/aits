@@ -10,14 +10,12 @@ import org.springframework.web.bind.annotation.*;
 import vip.xiaonuo.common.annotation.CommonLog;
 import vip.xiaonuo.common.pojo.CommonResult;
 import vip.xiaonuo.ewm.modular.project.entity.*;
-import vip.xiaonuo.ewm.modular.project.param.AttackPortScanPageParam;
-import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafeAddParam;
-import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafeCheckParam;
-import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafePageParam;
+import vip.xiaonuo.ewm.modular.project.param.*;
 import vip.xiaonuo.ewm.modular.project.service.AttackPortScanService;
 import vip.xiaonuo.ewm.modular.project.service.EwmProjectSafeService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import vip.xiaonuo.ewm.modular.project.service.SafeHardwareService;
+import vip.xiaonuo.ewm.modular.project.service.WebAttackService;
 
 import java.util.List;
 
@@ -41,6 +39,9 @@ public class EwmProjectSafeController {
 
     @Resource
     private AttackPortScanService attackPortScanService;
+
+    @Resource
+    private WebAttackService webAttackService;
 
     /**
      * 获取网络安全的客户端分页
@@ -87,6 +88,12 @@ public class EwmProjectSafeController {
         return attackPortScanService.save(attackPortScan);
     }
 
+    @Operation(summary = "web日志上传")
+    @PostMapping("/init/attack/web")
+    public CommonResult<String> webAttactk(@RequestBody WebAttackReportRequest webAttackReportRequest){
+        return webAttackService.save(webAttackReportRequest);
+    }
+
 
 
     /**
@@ -96,6 +103,16 @@ public class EwmProjectSafeController {
     @GetMapping("/portscan/page")
     public CommonResult<Page<AttackPortScan>> page(AttackPortScanPageParam attackPortScanPageParam) {
         Page<AttackPortScan> page = attackPortScanService.page(attackPortScanPageParam);
+        return CommonResult.data(page);
+    }
+
+    /**
+     * 获取web攻击日志分页 (来自 MongoDB)
+     */
+    @Operation(summary = "获取web攻击日志记录分页")
+    @GetMapping("/webattack/page")
+    public CommonResult<Page<WebAttack>> webAttackpage(WebAttackPageParam webAttackPageParam) {
+        Page<WebAttack> page = webAttackService.page(webAttackPageParam);
         return CommonResult.data(page);
     }
 }

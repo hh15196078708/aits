@@ -1,237 +1,365 @@
 # -*- coding: utf-8 -*-
 """
 模块名称: constants.py
-模块功能: 定义客户端程序的所有常量和可配置项
-依赖模块: 无（纯Python标准库）
-系统适配: 所有平台通用
+模块功能: 从 client_config.json 的 settings 节加载所有可配置项，向各模块提供统一的常量访问接口
 
-说明:
-    本模块集中管理所有配置项，支持外部修改无需改动代码。
-    配置项分为以下几类：
-    1. 服务端通信配置
-    2. 心跳与重试配置
-    3. 资源限制阈值
-    4. 日志配置
-    5. 授权相关配置
+client_config.json 与本文件同目录，由服务端统一生成下发。
+程序首次运行若文件不存在，则自动以内置默认值创建（标准 JSON，无注释）。
+
+攻击类型标识符、授权状态值、响应码等内部固定字符串是代码逻辑标识，不受 JSON 控制，
+始终在本文件末尾以 Python 常量方式定义。
 """
+
+import os
+import re
+import json
+
+# =============================================================================
+# JSON 注释剥离（支持 JSONC 格式，即 // 行注释）
+# =============================================================================
+
+def _strip_comments(text: str) -> str:
+    """
+    从 JSONC 文本中移除 // 行注释，同时保留字符串内的 //（如 URL http://...）。
+    使用正则优先匹配 JSON 字符串字面量，再匹配注释，注释部分替换为空字符串。
+    """
+    _pattern = re.compile(
+        r'"(?:[^"\\]|\\.)*"'  # JSON 字符串（原样保留，其中的 // 不处理）
+        r'|'
+        r'//[^\n]*'           # // 行注释（移除）
+    )
+    return _pattern.sub(
+        lambda m: m.group(0) if m.group(0).startswith('"') else '',
+        text
+    )
+
+
+# =============================================================================
+# 内置默认值（config 文件缺失或字段缺失时使用）
+# =============================================================================
+
+_DEFAULTS = {
+    "server": {
+        "url": "http://127.0.0.1:82/safe",
+        "project_id": "2023031623403520002",
+        "endpoints": {
+            "register":         "/init/add",
+            "heartbeat":        "/init/check",
+            "attack_portscan":  "/init/attack/portscan",
+            "attack_web":       "/init/attack/web",
+            "rule_lib_version": "/attack/rule/version",
+            "rule_lib_update":  "/attack/rule/update",
+            "detector_status":  "/attack/detector/status",
+            "attack_threshold": "/attack/threshold/get"
+        }
+    },
+    "heartbeat": {
+        "interval":       15,
+        "request_timeout": 5,
+        "max_retry":       5,
+        "retry_interval":  1
+    },
+    "resources": {
+        "cpu_peak_limit":            8,
+        "cpu_avg_limit":             5,
+        "cpu_throttle_threshold":    7,
+        "cpu_throttle_sleep":        0.1,
+        "cpu_sample_interval":       5,
+        "memory_peak_limit":         300,
+        "memory_resident_limit":     100,
+        "memory_warning_threshold":  280,
+        "disk_io_peak_limit":        10,
+        "disk_io_avg_limit":          1,
+        "disk_io_throttle_threshold": 9,
+        "disk_io_throttle_sleep":    0.5
+    },
+    "logging": {
+        "max_size":     10 * 1024 * 1024,
+        "backup_count": 5,
+        "buffer_size":  1024,
+        "level":        "INFO",
+        "file_prefix":  "client"
+    },
+    "auth": {
+        "cache_ttl":            300,
+        "offline_grace_period": 600
+    },
+    "storage": {
+        "config_file_name":     "client_config.json",
+        "config_dir_name":      "client_config",
+        "config_dir_name_unix": ".client_config"
+    },
+    "crypto": {
+        "aes_key_length": 128,
+        "aes_block_size":  16
+    },
+    "hardware": {
+        "cpu_usage_sample_interval": 0.5,
+        "machine_id_file":           ".machine_id"
+    },
+    "attack_detection": {
+        "rule_lib_sync_interval":        600,
+        "rule_lib_file_path":            "data/rule_lib.json",
+        "rule_lib_backup_path":          "data/rule_lib.backup.json",
+        "attack_log_batch_size":         50,
+        "attack_log_upload_interval":    30,
+        "attack_detector_restart_delay":  3,
+        "attack_detector_max_restart":   10,
+        "traffic_queue_max_size":     10000,
+        "traffic_collect_interval":     0.1,
+        "traffic_baseline_samples":     100,
+        "thresholds": {
+            "ddos_syn_connections":              1000,
+            "ddos_udp_pps":                     10000,
+            "ddos_icmp_pps":                     5000,
+            "ddos_traffic_mbps":                  100,
+            "brute_force_fail_count":               5,
+            "brute_force_time_window":             60,
+            "port_scan_port_count":                20,
+            "port_scan_time_window":               10,
+            "web_attack_check_interval":           10,
+            "web_attack_cooldown":                 60,
+            "web_attack_log_tail_size":         65536,
+            "traffic_burst_baseline_multiplier":   2.0,
+            "traffic_baseline_window":            600
+        }
+    }
+}
+
+# 配置文件与本文件同目录
+_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "client_config.json")
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """将 override 的键递归合并到 base（override 优先），返回新字典"""
+    result = dict(base)
+    for k, v in override.items():
+        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+            result[k] = _deep_merge(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+
+def _load_settings() -> dict:
+    """
+    读取 client_config.json 中的 settings 节。
+    - 文件存在：剥离注释后解析，将 settings 节与内置默认值深度合并（补全缺失字段）。
+    - 文件不存在或损坏：写入包含默认值的完整模板文件，返回默认 settings。
+    """
+    if os.path.exists(_CONFIG_FILE):
+        try:
+            with open(_CONFIG_FILE, "r", encoding="utf-8") as f:
+                raw = f.read()
+            loaded = json.loads(_strip_comments(raw))
+            if isinstance(loaded, dict):
+                settings = loaded.get("settings", {})
+                if isinstance(settings, dict):
+                    return _deep_merge(_DEFAULTS, settings)
+        except Exception:
+            pass
+
+    # 文件缺失或解析失败：生成完整默认模板（标准 JSON，无注释）
+    _write_default_config()
+    return _deep_merge({}, _DEFAULTS)
+
+
+def _write_default_config() -> None:
+    """将完整默认配置（settings + 空运行时状态）写入 client_config.json"""
+    template = {
+        "settings": _DEFAULTS,
+        "client_id":           None,
+        "machine_code":        None,
+        "auth_key":            None,
+        "expire_time":         None,
+        "machine_name":        None,
+        "ip_info":             None,
+        "os_info":             None,
+        "auth_cache":          None,
+        "first_run_time":      None,
+        "last_heartbeat_time": None,
+        "web_log_offsets":     {},
+        "web_log_sources":     []
+    }
+    try:
+        with open(_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(template, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+# 加载 settings 节
+_s = _load_settings()
 
 # =============================================================================
 # 服务端通信配置
 # =============================================================================
 
-# 服务端API基础地址，用户可根据实际部署情况修改
-SERVER_URL = "http://127.0.0.1:82/safe"  # 服务端API地址，格式: http(s)://host:port/path
+_srv  = _s.get("server", {})
+_ep   = _srv.get("endpoints", {})
+_d_ep = _DEFAULTS["server"]["endpoints"]
 
-# 注册接口路径，客户端首次运行时调用
-REGISTER_ENDPOINT = "/init/add"  # 注册接口，用于首次注册或更新机器信息
-
-# 心跳接口路径，客户端定时调用
-HEARTBEAT_ENDPOINT = "/init/check"  # 心跳接口，用于定时上报状态并获取授权状态
+SERVER_URL                      = _srv.get("url",             _DEFAULTS["server"]["url"])
+PROJECT_ID                      = _srv.get("project_id",      _DEFAULTS["server"]["project_id"])
+REGISTER_ENDPOINT               = _ep.get("register",         _d_ep["register"])
+HEARTBEAT_ENDPOINT              = _ep.get("heartbeat",        _d_ep["heartbeat"])
+ATTACK_LOG_UPLOAD_ENDPOINT      = _ep.get("attack_portscan",  _d_ep["attack_portscan"])
+ATTACK_LOG_WEB_UPLOAD_ENDPOINT  = _ep.get("attack_web",       _d_ep["attack_web"])
+RULE_LIB_VERSION_ENDPOINT       = _ep.get("rule_lib_version", _d_ep["rule_lib_version"])
+RULE_LIB_UPDATE_ENDPOINT        = _ep.get("rule_lib_update",  _d_ep["rule_lib_update"])
+ATTACK_DETECTOR_STATUS_ENDPOINT = _ep.get("detector_status",  _d_ep["detector_status"])
+ATTACK_THRESHOLD_ENDPOINT       = _ep.get("attack_threshold", _d_ep["attack_threshold"])
 
 # =============================================================================
 # 心跳与重试配置
 # =============================================================================
 
-# 心跳间隔时间（秒），严格控制为15秒
-HEARTBEAT_INTERVAL = 15  # 心跳发送间隔，单位：秒
+_hb   = _s.get("heartbeat", {})
+_d_hb = _DEFAULTS["heartbeat"]
 
-# HTTP请求超时时间（秒），避免网络阻塞导致程序卡死
-REQUEST_TIMEOUT = 5  # 网络请求超时时间，单位：秒，不超过3秒
-
-# 请求失败后的最大重试次数
-MAX_RETRY = 5  # 网络请求失败后的重试次数上限
-
-# 重试间隔时间（秒）
-RETRY_INTERVAL = 1  # 每次重试之间的等待时间，单位：秒
+HEARTBEAT_INTERVAL = _hb.get("interval",        _d_hb["interval"])
+REQUEST_TIMEOUT    = _hb.get("request_timeout",  _d_hb["request_timeout"])
+MAX_RETRY          = _hb.get("max_retry",         _d_hb["max_retry"])
+RETRY_INTERVAL     = _hb.get("retry_interval",    _d_hb["retry_interval"])
 
 # =============================================================================
-# 资源限制阈值（严格约束）
+# 资源限制阈值
 # =============================================================================
 
-# CPU占用限制
-CPU_PEAK_LIMIT = 8  # CPU峰值上限，单位：%，超过此值需要降速
-CPU_AVG_LIMIT = 5  # CPU平均值上限，单位：%
-CPU_THROTTLE_THRESHOLD = 7  # CPU节流阈值，超过此值主动休眠
-CPU_THROTTLE_SLEEP = 0.1  # CPU超限时的休眠时间，单位：秒
-CPU_SAMPLE_INTERVAL = 5  # CPU采样间隔，单位：秒
+_res   = _s.get("resources", {})
+_d_res = _DEFAULTS["resources"]
 
-# 内存占用限制
-MEMORY_PEAK_LIMIT = 300  # 内存峰值上限，单位：MB
-MEMORY_RESIDENT_LIMIT = 100  # 常驻内存上限，单位：MB
-MEMORY_WARNING_THRESHOLD = 280  # 内存警告阈值，超过此值释放缓存，单位：MB
-
-# 磁盘IO限制
-DISK_IO_PEAK_LIMIT = 10  # 磁盘IO峰值上限，单位：MB/s
-DISK_IO_AVG_LIMIT = 1  # 磁盘IO平均上限，单位：MB/s
-DISK_IO_THROTTLE_THRESHOLD = 9  # 磁盘IO节流阈值，单位：MB/s
-DISK_IO_THROTTLE_SLEEP = 0.5  # 磁盘IO超限时的暂停时间，单位：秒
+CPU_PEAK_LIMIT             = _res.get("cpu_peak_limit",            _d_res["cpu_peak_limit"])
+CPU_AVG_LIMIT              = _res.get("cpu_avg_limit",             _d_res["cpu_avg_limit"])
+CPU_THROTTLE_THRESHOLD     = _res.get("cpu_throttle_threshold",    _d_res["cpu_throttle_threshold"])
+CPU_THROTTLE_SLEEP         = _res.get("cpu_throttle_sleep",        _d_res["cpu_throttle_sleep"])
+CPU_SAMPLE_INTERVAL        = _res.get("cpu_sample_interval",       _d_res["cpu_sample_interval"])
+MEMORY_PEAK_LIMIT          = _res.get("memory_peak_limit",         _d_res["memory_peak_limit"])
+MEMORY_RESIDENT_LIMIT      = _res.get("memory_resident_limit",     _d_res["memory_resident_limit"])
+MEMORY_WARNING_THRESHOLD   = _res.get("memory_warning_threshold",  _d_res["memory_warning_threshold"])
+DISK_IO_PEAK_LIMIT         = _res.get("disk_io_peak_limit",        _d_res["disk_io_peak_limit"])
+DISK_IO_AVG_LIMIT          = _res.get("disk_io_avg_limit",         _d_res["disk_io_avg_limit"])
+DISK_IO_THROTTLE_THRESHOLD = _res.get("disk_io_throttle_threshold",_d_res["disk_io_throttle_threshold"])
+DISK_IO_THROTTLE_SLEEP     = _res.get("disk_io_throttle_sleep",    _d_res["disk_io_throttle_sleep"])
 
 # =============================================================================
 # 日志配置
 # =============================================================================
 
-# 单个日志文件的最大大小（字节），超过后自动切割
-LOG_MAX_SIZE = 10 * 1024 * 1024  # 10MB，日志文件大小上限
+_log   = _s.get("logging", {})
+_d_log = _DEFAULTS["logging"]
 
-# 日志文件备份数量
-LOG_BACKUP_COUNT = 5  # 保留最近5个日志备份文件
-
-# 日志写入缓冲区大小（字节）
-LOG_BUFFER_SIZE = 1024  # 1KB，批量写入缓冲区大小
-
-# 日志级别
-LOG_LEVEL = "INFO"  # 默认日志级别：DEBUG, INFO, WARNING, ERROR, CRITICAL
-
-# 日志文件名前缀
-LOG_FILE_PREFIX = "client"  # 日志文件名前缀，生成格式：client.log
+LOG_MAX_SIZE     = _log.get("max_size",     _d_log["max_size"])
+LOG_BACKUP_COUNT = _log.get("backup_count", _d_log["backup_count"])
+LOG_BUFFER_SIZE  = _log.get("buffer_size",  _d_log["buffer_size"])
+LOG_LEVEL        = _log.get("level",        _d_log["level"])
+LOG_FILE_PREFIX  = _log.get("file_prefix",  _d_log["file_prefix"])
 
 # =============================================================================
 # 授权相关配置
 # =============================================================================
 
-# 授权状态缓存有效期（秒）
-AUTH_CACHE_TTL = 300  # 5分钟，授权状态本地缓存有效期
+_auth   = _s.get("auth", {})
+_d_auth = _DEFAULTS["auth"]
 
-# 离线宽限期（秒），网络不可用时允许临时运行的最长时间
-OFFLINE_GRACE_PERIOD = 600  # 10分钟，离线状态下允许运行的最长时间
+AUTH_CACHE_TTL       = _auth.get("cache_ttl",            _d_auth["cache_ttl"])
+OFFLINE_GRACE_PERIOD = _auth.get("offline_grace_period", _d_auth["offline_grace_period"])
 
 # =============================================================================
 # 配置文件相关
 # =============================================================================
 
-# 配置文件名
-CONFIG_FILE_NAME = "client_config.json"  # 配置文件名称
+_stor   = _s.get("storage", {})
+_d_stor = _DEFAULTS["storage"]
 
-# 配置文件目录名（用于各平台）
-CONFIG_DIR_NAME = "client_config"  # Windows: %APPDATA%/client_config
-CONFIG_DIR_NAME_UNIX = ".client_config"  # Linux/macOS: ~/.client_config
+CONFIG_FILE_NAME     = _stor.get("config_file_name",     _d_stor["config_file_name"])
+CONFIG_DIR_NAME      = _stor.get("config_dir_name",      _d_stor["config_dir_name"])
+CONFIG_DIR_NAME_UNIX = _stor.get("config_dir_name_unix", _d_stor["config_dir_name_unix"])
 
 # =============================================================================
-# AES加密配置
+# AES 加密配置
 # =============================================================================
 
-# AES密钥长度（位）
-AES_KEY_LENGTH = 128  # 128位AES密钥，即16字节
+_cry   = _s.get("crypto", {})
+_d_cry = _DEFAULTS["crypto"]
 
-# AES块大小（字节）
-AES_BLOCK_SIZE = 16  # AES块大小固定为16字节
+AES_KEY_LENGTH = _cry.get("aes_key_length", _d_cry["aes_key_length"])
+AES_BLOCK_SIZE = _cry.get("aes_block_size", _d_cry["aes_block_size"])
 
 # =============================================================================
 # 硬件采集配置
 # =============================================================================
 
-# CPU使用率采样间隔（秒），降低CPU占用
-CPU_USAGE_SAMPLE_INTERVAL = 0.5  # CPU使用率采样间隔，不超过0.5秒
+_hw   = _s.get("hardware", {})
+_d_hw = _DEFAULTS["hardware"]
 
-# 机器码持久化文件名（UUID兜底时使用）
-MACHINE_ID_FILE = ".machine_id"  # 机器码持久化文件名
+CPU_USAGE_SAMPLE_INTERVAL = _hw.get("cpu_usage_sample_interval", _d_hw["cpu_usage_sample_interval"])
+MACHINE_ID_FILE           = _hw.get("machine_id_file",           _d_hw["machine_id_file"])
 
 # =============================================================================
-# 系统兼容性配置
+# 攻击检测配置
 # =============================================================================
 
-# 支持的最低Python版本
-MIN_PYTHON_VERSION = (3, 6)  # 最低Python 3.6
+_atk   = _s.get("attack_detection", {})
+_d_atk = _DEFAULTS["attack_detection"]
 
-# 支持的操作系统列表（用于检测和提示）
+RULE_LIB_SYNC_INTERVAL        = _atk.get("rule_lib_sync_interval",        _d_atk["rule_lib_sync_interval"])
+RULE_LIB_FILE_PATH             = _atk.get("rule_lib_file_path",             _d_atk["rule_lib_file_path"])
+RULE_LIB_BACKUP_PATH           = _atk.get("rule_lib_backup_path",           _d_atk["rule_lib_backup_path"])
+ATTACK_LOG_BATCH_SIZE          = _atk.get("attack_log_batch_size",          _d_atk["attack_log_batch_size"])
+ATTACK_LOG_UPLOAD_INTERVAL     = _atk.get("attack_log_upload_interval",     _d_atk["attack_log_upload_interval"])
+ATTACK_DETECTOR_RESTART_DELAY  = _atk.get("attack_detector_restart_delay",  _d_atk["attack_detector_restart_delay"])
+ATTACK_DETECTOR_MAX_RESTART    = _atk.get("attack_detector_max_restart",    _d_atk["attack_detector_max_restart"])
+TRAFFIC_QUEUE_MAX_SIZE         = _atk.get("traffic_queue_max_size",         _d_atk["traffic_queue_max_size"])
+TRAFFIC_COLLECT_INTERVAL       = _atk.get("traffic_collect_interval",       _d_atk["traffic_collect_interval"])
+TRAFFIC_BASELINE_SAMPLES       = _atk.get("traffic_baseline_samples",       _d_atk["traffic_baseline_samples"])
+DEFAULT_THRESHOLDS             = dict(_atk.get("thresholds",                _d_atk["thresholds"]))
+
+# =============================================================================
+# 系统兼容性配置（固定，不写入 JSON）
+# =============================================================================
+
+MIN_PYTHON_VERSION = (3, 6)
+
 SUPPORTED_OS = {
     "Windows": ["7", "8", "10", "11", "Server 2016", "Server 2019", "Server 2022"],
     "Linux": ["Ubuntu", "CentOS", "Debian", "Fedora", "openSUSE", "UOS", "Kylin", "Deepin"],
-    "Darwin": ["10.14+"]  # macOS Mojave及以上
+    "Darwin": ["10.14+"]
 }
 
-# =============================================================================
-# 授权状态常量
-# =============================================================================
-
-# 授权状态枚举值
-AUTH_STATUS_NORMAL = "normal"  # 授权正常
-AUTH_STATUS_EXPIRED = "expired"  # 授权已到期
-
-# API响应码
-RESPONSE_CODE_SUCCESS = 0  # 请求成功
-RESPONSE_CODE_AUTH_EXPIRED = 1001  # 授权已到期
-RESPONSE_CODE_INVALID_MACHINE = 1002  # 无效的机器码
-RESPONSE_CODE_SERVER_ERROR = 5000  # 服务端内部错误
-
-PROJECT_ID="2023031623403520002"
-
-# =============================================================================
-# 攻击识别与特征库管理配置
-# =============================================================================
-
-# 特征库同步配置
-RULE_LIB_SYNC_INTERVAL = 600  # 特征库主动拉取间隔，单位：秒（10分钟）
-RULE_LIB_VERSION_ENDPOINT = "/attack/rule/version"  # 特征库版本查询接口
-RULE_LIB_UPDATE_ENDPOINT = "/attack/rule/update"  # 特征库增量更新接口
-RULE_LIB_FILE_PATH = "data/rule_lib.json"  # 特征库本地存储路径
-RULE_LIB_BACKUP_PATH = "data/rule_lib.backup.json"  # 特征库备份路径
-
-# 攻击日志上传配置
-ATTACK_LOG_UPLOAD_ENDPOINT = "/init/attack/portscan"  # 端口扫描日志上传接口
-ATTACK_LOG_WEB_UPLOAD_ENDPOINT = "/init/attack/web"  # Web攻击日志上传接口
-ATTACK_LOG_BATCH_SIZE = 50  # 批量上传日志数量
-ATTACK_LOG_UPLOAD_INTERVAL = 30  # 日志上传间隔，单位：秒
-
-# 攻击识别异常上报配置
-ATTACK_DETECTOR_STATUS_ENDPOINT = "/attack/detector/status"  # 识别模块状态上报接口
-ATTACK_DETECTOR_RESTART_DELAY = 3  # 模块异常后重启延迟，单位：秒
-ATTACK_DETECTOR_MAX_RESTART = 10  # 最大重启次数
-
-# 阈值配置下发接口
-ATTACK_THRESHOLD_ENDPOINT = "/attack/threshold/get"  # 阈值配置获取接口
-
-# 攻击类型定义
-ATTACK_TYPE_DDOS_SYN = "ddos_syn_flood"  # SYN Flood攻击
-ATTACK_TYPE_DDOS_UDP = "ddos_udp_flood"  # UDP Flood攻击
-ATTACK_TYPE_DDOS_ICMP = "ddos_icmp_flood"  # ICMP Flood攻击
-ATTACK_TYPE_BRUTE_FORCE = "brute_force"  # 暴力破解
-ATTACK_TYPE_PORT_SCAN = "port_scan"  # 端口扫描
-ATTACK_TYPE_SQL_INJECTION = "sql_injection"  # SQL注入
-ATTACK_TYPE_XSS = "xss_attempt"  # XSS攻击
-ATTACK_TYPE_DIR_TRAVERSAL = "dir_traversal"  # 目录遍历攻击
-ATTACK_TYPE_CMD_INJECTION = "cmd_injection"  # 命令注入攻击
-ATTACK_TYPE_CSRF = "csrf_attempt"  # CSRF攻击
-ATTACK_TYPE_RCE = "rce_attempt"  # 远程代码执行攻击
-ATTACK_TYPE_TRAFFIC_BURST = "traffic_burst"  # 异常流量突发
-ATTACK_TYPE_MALWARE_C2 = "malware_c2"  # 恶意软件外联
-
-# 攻击等级定义
-ATTACK_LEVEL_HIGH = "high"  # 高危
-ATTACK_LEVEL_MEDIUM = "medium"  # 中危
-ATTACK_LEVEL_LOW = "low"  # 低危
-
-# 攻击识别默认阈值
-DEFAULT_THRESHOLDS = {
-    # DDoS攻击阈值
-    "ddos_syn_connections": 1000,  # SYN连接数阈值
-    "ddos_udp_pps": 10000,  # UDP包速率阈值（包/秒）
-    "ddos_icmp_pps": 5000,  # ICMP包速率阈值（包/秒）
-    "ddos_traffic_mbps": 100,  # 流量峰值阈值（MB/s）
-
-    # 暴力破解阈值
-    "brute_force_fail_count": 5,  # 失败次数阈值
-    "brute_force_time_window": 60,  # 时间窗口（秒）
-
-    # 端口扫描阈值
-    "port_scan_port_count": 20,  # 扫描端口数量阈值
-    "port_scan_time_window": 10,  # 时间窗口（秒）
-
-    # Web攻击检测阈值
-    "web_attack_check_interval": 10,  # Web日志扫描间隔（秒）
-    "web_attack_cooldown": 60,  # 同一IP同类攻击告警冷却时间（秒）
-    "web_attack_log_tail_size": 65536,  # 首次读取日志末尾大小（字节，64KB）
-
-    # 异常流量突发阈值
-    "traffic_burst_baseline_multiplier": 2.0,  # 基线倍数（200%）
-    "traffic_baseline_window": 600,  # 基线统计窗口（秒，10分钟）
-}
-
-# 流量采集配置
-TRAFFIC_QUEUE_MAX_SIZE = 10000  # 流量数据队列最大长度
-TRAFFIC_COLLECT_INTERVAL = 0.1  # 流量采集间隔，单位：秒
-TRAFFIC_BASELINE_SAMPLES = 100  # 基线统计样本数量
-
-# 性能要求
 ATTACK_DETECTION_FALSE_POSITIVE_RATE = 0.03  # 误报率上限：3%
 ATTACK_DETECTION_FALSE_NEGATIVE_RATE = 0.005  # 漏报率上限：0.5%
+
+# =============================================================================
+# 授权状态常量（代码内部固定标识符，不写入 JSON）
+# =============================================================================
+
+AUTH_STATUS_NORMAL  = "normal"   # 授权正常
+AUTH_STATUS_EXPIRED = "expired"  # 授权已到期
+
+RESPONSE_CODE_SUCCESS         = 0     # 请求成功
+RESPONSE_CODE_AUTH_EXPIRED    = 1001  # 授权已到期
+RESPONSE_CODE_INVALID_MACHINE = 1002  # 无效的机器码
+RESPONSE_CODE_SERVER_ERROR    = 5000  # 服务端内部错误
+
+# =============================================================================
+# 攻击类型定义（代码内部固定标识符，不写入 JSON）
+# =============================================================================
+
+ATTACK_TYPE_DDOS_SYN      = "ddos_syn_flood"  # SYN Flood 攻击
+ATTACK_TYPE_DDOS_UDP      = "ddos_udp_flood"  # UDP Flood 攻击
+ATTACK_TYPE_DDOS_ICMP     = "ddos_icmp_flood" # ICMP Flood 攻击
+ATTACK_TYPE_BRUTE_FORCE   = "brute_force"     # 暴力破解
+ATTACK_TYPE_PORT_SCAN     = "port_scan"       # 端口扫描
+ATTACK_TYPE_SQL_INJECTION = "sql_injection"   # SQL 注入
+ATTACK_TYPE_XSS           = "xss_attempt"     # XSS 攻击
+ATTACK_TYPE_DIR_TRAVERSAL = "dir_traversal"   # 目录遍历
+ATTACK_TYPE_CMD_INJECTION = "cmd_injection"   # 命令注入
+ATTACK_TYPE_CSRF          = "csrf_attempt"    # CSRF 攻击
+ATTACK_TYPE_RCE           = "rce_attempt"     # 远程代码执行
+ATTACK_TYPE_TRAFFIC_BURST = "traffic_burst"   # 异常流量突发
+ATTACK_TYPE_MALWARE_C2    = "malware_c2"      # 恶意软件外联
+
+ATTACK_LEVEL_HIGH   = "high"    # 高危
+ATTACK_LEVEL_MEDIUM = "medium"  # 中危
+ATTACK_LEVEL_LOW    = "low"     # 低危

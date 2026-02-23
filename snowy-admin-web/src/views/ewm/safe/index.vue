@@ -71,6 +71,7 @@
 					<a-space>
 						<a @click="handleMonitor(record)">监控</a>
 						<a @click="handlePortScan(record)">端口扫描</a>
+						<a @click="handleWebAttack(record)">web攻击日志</a>
 <!--						<a-divider type="vertical" v-if="hasPerm('ewmProjectSafeEdit')" />-->
 <!--						<a @click="formRef.onOpen(record)" v-if="hasPerm('ewmProjectSafeEdit')">编辑</a>-->
 <!--						<a-divider type="vertical" v-if="hasPerm(['ewmProjectSafeEdit', 'ewmProjectSafeDelete'], 'and')" />-->
@@ -175,6 +176,17 @@ const loadProjectList = () => {
 		projectList.value = res.records
 	})
 }
+
+const handleWebAttack = (record) => {
+	router.push({
+		path: '/ewm/projectsafe/webattack', // 注意：请确保这个路径与您路由配置中端口扫描页面的路径一致
+		query: {
+			safeId: record.id, // 将当前记录的 id 作为 safeId 传递，请根据实际业务调整，如果是机器码等其他字段请修改这里
+			projectName: record.projectName // 传递项目名称，可选，方便在目标页面展示
+		}
+	})
+}
+
 // 新增：跳转端口扫描记录页面
 const handlePortScan = (record) => {
 	router.push({

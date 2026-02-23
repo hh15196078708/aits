@@ -12,5 +12,5 @@ public class WebAttackReportRequest {
     @JsonProperty("clientId") // 映射 JSON 中的 client_id
     private String clientId;
 
-    private List<WebAttack> logs;
+    private List<WebAttackLog> logs;
 }

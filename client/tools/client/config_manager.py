@@ -1,602 +1,406 @@
 # -*- coding: utf-8 -*-
 """
 模块名称: config_manager.py
-模块功能: 配置文件读写、跨平台路径适配、持久化存储
-依赖模块: 标准库 (os, json, threading)
+模块功能: 读写 client_config.json 中的运行时状态，跨平台路径适配，线程安全持久化
+依赖模块: 标准库 (os, re, json, threading)
 系统适配: 所有平台通用
 
 说明:
-    本模块负责管理客户端配置：
-    1. 跨平台配置目录自动适配
-    2. JSON格式配置文件读写
-    3. 权限检测与创建
-    4. 存储机器码、授权密钥、基础信息、授权状态缓存
+    本模块负责管理客户端的运行时状态持久化：
+    1. 配置文件为项目目录下的 client_config.json（由服务端统一生成下发）
+    2. 支持 JSONC 格式（// 行注释），加载时自动剥离注释
+    3. 保存时写入标准 JSON（注释不会还原，但不影响功能）
+    4. 运行时状态字段（client_id、machine_code 等）与 settings 节共存于同一文件
     5. 线程安全的读写操作
 """
 
-import os  # 操作系统接口
-import json  # JSON序列化
-import threading  # 线程模块
-from typing import Any, Dict, List, Optional  # 类型提示
+import os
+import re
+import json
+import threading
+from typing import Any, Dict, List, Optional
 
-# 导入本地模块
-from constants import CONFIG_FILE_NAME  # 配置文件名
-from system_adapter import system_adapter  # 系统适配器
+from constants import CONFIG_FILE_NAME
 from utils import (
-    safe_file_read,  # 安全文件读取
-    safe_file_write,  # 安全文件写入
-    safe_json_loads,  # 安全JSON解析
-    get_timestamp  # 获取时间戳
+    safe_file_read,
+    safe_file_write,
+    safe_json_loads,
+    get_timestamp
 )
+
+
+# =============================================================================
+# JSONC 注释剥离（与 constants.py 中保持相同实现）
+# =============================================================================
+
+def _strip_comments(text: str) -> str:
+    """
+    从 JSONC 文本中移除 // 行注释，保留字符串内的 //（如 URL http://...）。
+    """
+    _pattern = re.compile(
+        r'"(?:[^"\\]|\\.)*"'  # JSON 字符串（原样保留）
+        r'|'
+        r'//[^\n]*'           # // 行注释（移除）
+    )
+    return _pattern.sub(
+        lambda m: m.group(0) if m.group(0).startswith('"') else '',
+        text
+    )
 
 
 class ConfigManager:
     """
-    配置管理器类
-    
-    功能: 管理客户端所有配置数据的持久化存储
-    系统适配: 所有平台通用，路径自动适配
-    
-    配置数据结构:
-    {
-        "client_id": "服务端返回的客户端ID",
-        "machine_code": "机器唯一标识",
-        "auth_key": "授权密钥",
-        "expire_time": "授权到期时间",
-        "machine_name": "机器名称",
-        "ip_info": {
-            "internal_ip": "内网IP",
-            "external_ip": "公网IP",
-            "source": "采集来源"
-        },
-        "os_info": {
-            "type": "系统类型",
-            "version": "系统版本",
-            "arch": "架构",
-            "kernel": "内核版本"
-        },
-        "auth_cache": {
-            "status": "授权状态",
-            "update_time": "更新时间戳"
-        },
-        "first_run_time": "首次运行时间戳",
-        "last_heartbeat_time": "最后心跳时间戳"
-    }
+    配置管理器（单例）
+
+    功能: 管理 client_config.json 中运行时状态字段的读写
+    配置文件位置: 与源码同目录（项目根目录），由服务端统一下发
+
+    支持 JSONC（// 注释）格式加载，保存时写回标准 JSON。
+    settings 节由 constants.py 负责读取，本类不修改该节内容，
+    但在保存时会将其原样写回，确保文件完整性。
+
+    运行时状态字段:
+        client_id           — 服务端分配的客户端 ID
+        machine_code        — 机器唯一码
+        auth_key            — 授权密钥
+        expire_time         — 授权到期时间
+        machine_name        — 机器名称
+        ip_info             — IP 信息 {internal_ip, external_ip, source}
+        os_info             — 系统信息 {type, version, arch, kernel}
+        auth_cache          — 授权状态缓存 {status, update_time}
+        first_run_time      — 首次运行时间戳
+        last_heartbeat_time — 最后心跳时间戳
+        web_log_offsets     — Web 日志文件读取偏移量
+        web_log_sources     — Web 日志源配置列表
     """
-    
-    _instance = None  # 单例实例
-    _initialized = False  # 初始化标志
-    
+
+    _instance = None
+    _initialized = False
+
     def __new__(cls):
-        """
-        实现单例模式
-        
-        功能: 确保全局只有一个配置管理器实例
-        """
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def __init__(self):
-        """
-        初始化配置管理器
-        
-        功能: 加载现有配置或创建新配置
-        参数: 无
-        返回值: 无
-        异常情况: 配置目录创建失败时会抛出异常
-        """
-        if ConfigManager._initialized:  # 避免重复初始化
+        if ConfigManager._initialized:
             return
-        
-        self._config: Dict[str, Any] = {}  # 配置数据字典
-        self._config_dir: str = ""  # 配置目录路径
-        self._config_file: str = ""  # 配置文件路径
-        self._lock = threading.Lock()  # 线程锁，保证读写安全
-        
-        self._init_config_path()  # 初始化配置路径
-        self._load_config()  # 加载配置
+
+        self._config: Dict[str, Any] = {}
+        self._config_dir: str = ""
+        self._config_file: str = ""
+        self._lock = threading.Lock()
+
+        self._init_config_path()
+        self._load_config()
         ConfigManager._initialized = True
-    
+
+    # -------------------------------------------------------------------------
+    # 内部：路径初始化与文件读写
+    # -------------------------------------------------------------------------
+
     def _init_config_path(self) -> None:
         """
-        初始化配置文件路径
-        
-        功能: 根据系统类型确定配置目录，并确保目录存在
-        参数: 无
-        返回值: 无
-        异常情况: 目录创建失败时抛出异常
+        初始化配置文件路径。
+        配置文件（client_config.json）与本模块同目录，由服务端下发到此路径。
         """
-        # 获取系统适配的配置目录
-        self._config_dir = system_adapter.get_config_dir()
-        
-        # 确保目录存在并可写
-        success, error_msg = system_adapter.ensure_dir_exists(self._config_dir)
-        if not success:
-            # 目录创建失败，抛出异常
-            raise PermissionError(f"无法创建配置目录: {error_msg}")
-        
-        # 构建配置文件完整路径
+        self._config_dir = os.path.dirname(os.path.abspath(__file__))
         self._config_file = os.path.join(self._config_dir, CONFIG_FILE_NAME)
-    
+
     def _load_config(self) -> None:
         """
-        从文件加载配置
-        
-        功能: 读取配置文件并解析为字典
-        参数: 无
-        返回值: 无
-        异常情况: 文件不存在或解析失败时使用空配置
+        从 client_config.json 加载全部内容（含 settings 节和运行时状态）。
+        加载时自动剥离 // 行注释，支持 JSONC 格式。
         """
-        with self._lock:  # 获取锁
-            # 读取配置文件内容
+        with self._lock:
             content = safe_file_read(self._config_file)
-            
-            if content:  # 文件存在且有内容
-                # 解析JSON
-                parsed = safe_json_loads(content, default={})
-                if isinstance(parsed, dict):  # 确保是字典类型
-                    self._config = parsed
-                else:
-                    self._config = {}  # 解析结果不是字典，使用空配置
+            if content:
+                cleaned = _strip_comments(content)
+                parsed = safe_json_loads(cleaned, default={})
+                self._config = parsed if isinstance(parsed, dict) else {}
             else:
-                self._config = {}  # 文件不存在或为空
-    
+                self._config = {}
+
     def _save_config(self) -> bool:
         """
-        保存配置到文件
-        
-        功能: 将配置字典序列化为JSON并写入文件
-        参数: 无
-        返回值: True表示成功，False表示失败
-        异常情况: 写入失败时返回False
+        将全部配置（含 settings 节和运行时状态）序列化为标准 JSON 并写入文件。
+        注意：保存时注释不会还原（标准 JSON 不支持注释），但内容完整无损。
         """
         try:
-            # 序列化为格式化的JSON（便于人工查看）
             content = json.dumps(
                 self._config,
-                ensure_ascii=False,  # 允许中文
-                indent=2,  # 缩进2空格
-                sort_keys=True  # 键排序
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True
             )
-            # 写入文件
             return safe_file_write(self._config_file, content)
         except Exception:
             return False
-    
+
+    # -------------------------------------------------------------------------
+    # 首次运行检测
+    # -------------------------------------------------------------------------
+
     def is_first_run(self) -> bool:
-        """
-        检查是否为首次运行
-        
-        功能: 判断是否为首次运行（配置文件不存在或无机器码）
-        参数: 无
-        返回值: True表示首次运行，False表示非首次
-        异常情况: 无
-        
-        判断逻辑:
-            1. 配置文件不存在 -> 首次运行
-            2. 配置中没有machine_code -> 首次运行
-            3. 其他情况 -> 非首次运行
-        """
+        """返回 True 表示首次运行（配置中尚无 machine_code）"""
         with self._lock:
-            # 检查配置中是否有机器码
             return not self._config.get("machine_code")
-    
+
+    # -------------------------------------------------------------------------
+    # 机器码
+    # -------------------------------------------------------------------------
+
     def get_machine_code(self) -> Optional[str]:
-        """
-        获取机器码
-        
-        功能: 返回存储的机器唯一标识
-        参数: 无
-        返回值: 机器码字符串，不存在时返回None
-        异常情况: 无
-        """
+        """获取机器唯一码"""
         with self._lock:
             return self._config.get("machine_code")
-    
+
     def set_machine_code(self, machine_code: str) -> bool:
-        """
-        设置机器码
-        
-        功能: 存储机器唯一标识并持久化
-        参数:
-            machine_code: 机器码字符串
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        """
+        """设置并持久化机器唯一码"""
         with self._lock:
             self._config["machine_code"] = machine_code
             return self._save_config()
-    
+
+    # -------------------------------------------------------------------------
+    # 客户端 ID
+    # -------------------------------------------------------------------------
+
     def get_client_id(self) -> Optional[str]:
-        """
-        获取客户端ID
-        
-        功能: 返回服务端分配的客户端ID
-        参数: 无
-        返回值: 客户端ID字符串，不存在时返回None
-        异常情况: 无
-        """
+        """获取服务端分配的客户端 ID"""
         with self._lock:
             return self._config.get("client_id")
-    
+
     def set_client_id(self, client_id: str) -> bool:
-        """
-        设置客户端ID
-        
-        功能: 存储服务端返回的客户端ID并持久化
-        参数:
-            client_id: 客户端ID字符串
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        """
+        """设置并持久化客户端 ID"""
         with self._lock:
             self._config["client_id"] = client_id
             return self._save_config()
-    
+
+    # -------------------------------------------------------------------------
+    # 授权密钥
+    # -------------------------------------------------------------------------
+
     def get_auth_key(self) -> Optional[str]:
-        """
-        获取授权密钥
-        
-        功能: 返回存储的授权密钥
-        参数: 无
-        返回值: 授权密钥字符串，不存在时返回None
-        异常情况: 无
-        """
+        """获取授权密钥"""
         with self._lock:
             return self._config.get("auth_key")
-    
+
     def set_auth_key(self, auth_key: str) -> bool:
-        """
-        设置授权密钥
-        
-        功能: 存储授权密钥并持久化
-        参数:
-            auth_key: 授权密钥字符串
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        """
+        """设置并持久化授权密钥"""
         with self._lock:
             self._config["auth_key"] = auth_key
             return self._save_config()
-    
+
+    # -------------------------------------------------------------------------
+    # 授权到期时间
+    # -------------------------------------------------------------------------
+
     def get_expire_time(self) -> Optional[str]:
-        """
-        获取授权到期时间
-        
-        功能: 返回授权到期时间字符串
-        参数: 无
-        返回值: 到期时间字符串，不存在时返回None
-        异常情况: 无
-        """
+        """获取授权到期时间字符串"""
         with self._lock:
             return self._config.get("expire_time")
-    
+
     def set_expire_time(self, expire_time: str) -> bool:
-        """
-        设置授权到期时间
-        
-        功能: 存储授权到期时间并持久化
-        参数:
-            expire_time: 到期时间字符串
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        """
+        """设置并持久化授权到期时间"""
         with self._lock:
             self._config["expire_time"] = expire_time
             return self._save_config()
-    
+
+    # -------------------------------------------------------------------------
+    # 机器名称
+    # -------------------------------------------------------------------------
+
     def get_machine_name(self) -> Optional[str]:
-        """
-        获取机器名称
-        
-        功能: 返回存储的机器名称
-        参数: 无
-        返回值: 机器名称字符串，不存在时返回None
-        异常情况: 无
-        """
+        """获取机器名称（主机名）"""
         with self._lock:
             return self._config.get("machine_name")
-    
+
     def set_machine_name(self, machine_name: str) -> bool:
-        """
-        设置机器名称
-        
-        功能: 存储机器名称并持久化
-        参数:
-            machine_name: 机器名称字符串
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        """
+        """设置并持久化机器名称"""
         with self._lock:
             self._config["machine_name"] = machine_name
             return self._save_config()
-    
+
+    # -------------------------------------------------------------------------
+    # IP 信息
+    # -------------------------------------------------------------------------
+
     def get_ip_info(self) -> Optional[Dict]:
-        """
-        获取IP信息
-        
-        功能: 返回存储的IP信息字典
-        参数: 无
-        返回值: IP信息字典，不存在时返回None
-        异常情况: 无
-        """
+        """获取 IP 信息（含 internal_ip / external_ip / source）"""
         with self._lock:
             return self._config.get("ip_info")
-    
+
     def set_ip_info(self, ip_info: Dict) -> bool:
-        """
-        设置IP信息
-        
-        功能: 存储IP信息并持久化
-        参数:
-            ip_info: IP信息字典，包含internal_ip、external_ip、source
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        """
+        """设置并持久化 IP 信息"""
         with self._lock:
             self._config["ip_info"] = ip_info
             return self._save_config()
-    
+
+    # -------------------------------------------------------------------------
+    # 操作系统信息
+    # -------------------------------------------------------------------------
+
     def get_os_info(self) -> Optional[Dict]:
-        """
-        获取操作系统信息
-        
-        功能: 返回存储的操作系统信息字典
-        参数: 无
-        返回值: 系统信息字典，不存在时返回None
-        异常情况: 无
-        """
+        """获取操作系统信息（含 type / version / arch / kernel）"""
         with self._lock:
             return self._config.get("os_info")
-    
+
     def set_os_info(self, os_info: Dict) -> bool:
-        """
-        设置操作系统信息
-        
-        功能: 存储操作系统信息并持久化
-        参数:
-            os_info: 系统信息字典，包含type、version、arch、kernel
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        """
+        """设置并持久化操作系统信息"""
         with self._lock:
             self._config["os_info"] = os_info
             return self._save_config()
-    
+
+    # -------------------------------------------------------------------------
+    # 授权状态缓存
+    # -------------------------------------------------------------------------
+
     def get_auth_cache(self) -> Optional[Dict]:
-        """
-        获取授权缓存
-        
-        功能: 返回授权状态缓存信息
-        参数: 无
-        返回值: 缓存字典，包含status和update_time
-        异常情况: 无
-        """
+        """获取授权状态缓存（含 status 和 update_time）"""
         with self._lock:
             return self._config.get("auth_cache")
-    
+
     def set_auth_cache(self, status: str) -> bool:
-        """
-        设置授权缓存
-        
-        功能: 更新授权状态缓存并记录时间
-        参数:
-            status: 授权状态（normal/expired）
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        """
+        """更新授权状态缓存，并记录当前时间戳"""
         with self._lock:
             self._config["auth_cache"] = {
                 "status": status,
                 "update_time": get_timestamp()
             }
             return self._save_config()
-    
+
+    # -------------------------------------------------------------------------
+    # 首次运行时间戳
+    # -------------------------------------------------------------------------
+
     def get_first_run_time(self) -> Optional[int]:
-        """
-        获取首次运行时间
-        
-        功能: 返回首次运行的时间戳
-        参数: 无
-        返回值: Unix时间戳，不存在时返回None
-        异常情况: 无
-        """
+        """获取首次运行时间戳（Unix 秒）"""
         with self._lock:
             return self._config.get("first_run_time")
-    
+
     def set_first_run_time(self) -> bool:
-        """
-        设置首次运行时间
-        
-        功能: 记录首次运行时间戳
-        参数: 无
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        """
+        """记录首次运行时间戳（仅首次写入，已有则跳过）"""
         with self._lock:
-            if "first_run_time" not in self._config:  # 仅首次设置
+            if "first_run_time" not in self._config:
                 self._config["first_run_time"] = get_timestamp()
                 return self._save_config()
             return True
-    
+
+    # -------------------------------------------------------------------------
+    # 最后心跳时间戳
+    # -------------------------------------------------------------------------
+
     def get_last_heartbeat_time(self) -> Optional[int]:
-        """
-        获取最后心跳时间
-        
-        功能: 返回最后一次心跳的时间戳
-        参数: 无
-        返回值: Unix时间戳，不存在时返回None
-        异常情况: 无
-        """
+        """获取最后一次心跳时间戳（Unix 秒）"""
         with self._lock:
             return self._config.get("last_heartbeat_time")
-    
+
     def set_last_heartbeat_time(self) -> bool:
-        """
-        更新最后心跳时间
-        
-        功能: 记录当前心跳时间戳
-        参数: 无
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        """
+        """更新最后心跳时间戳为当前时间"""
         with self._lock:
             self._config["last_heartbeat_time"] = get_timestamp()
             return self._save_config()
-    
-    def update_registration_info(self, machine_code: str, auth_key: str, 
-                                 expire_time: str, machine_name: str,
-                                 ip_info: Dict, os_info: Dict) -> bool:
+
+    # -------------------------------------------------------------------------
+    # 批量更新（减少 IO 次数）
+    # -------------------------------------------------------------------------
+
+    def update_registration_info(self, machine_code: str, auth_key: str,
+                                  expire_time: str, machine_name: str,
+                                  ip_info: Dict, os_info: Dict) -> bool:
         """
-        更新注册信息
-        
-        功能: 批量更新所有注册相关信息
-        参数:
-            machine_code: 机器码
-            auth_key: 授权密钥
-            expire_time: 到期时间
-            machine_name: 机器名称
-            ip_info: IP信息字典
-            os_info: 系统信息字典
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
-        
-        说明: 批量更新减少IO操作次数
+        批量更新注册相关字段（一次 IO 完成所有写入）。
+        在首次注册或重新注册时调用。
         """
         with self._lock:
             self._config["machine_code"] = machine_code
-            self._config["auth_key"] = auth_key
-            self._config["expire_time"] = expire_time
+            self._config["auth_key"]     = auth_key
+            self._config["expire_time"]  = expire_time
             self._config["machine_name"] = machine_name
-            self._config["ip_info"] = ip_info
-            self._config["os_info"] = os_info
+            self._config["ip_info"]      = ip_info
+            self._config["os_info"]      = os_info
             self._config["first_run_time"] = self._config.get(
-                "first_run_time", get_timestamp())
+                "first_run_time", get_timestamp()
+            )
             return self._save_config()
-    
+
     def update_heartbeat_info(self, ip_info: Dict, os_info: Dict) -> bool:
         """
-        更新心跳相关信息
-        
-        功能: 更新IP和系统信息（非首次运行时调用）
-        参数:
-            ip_info: IP信息字典
-            os_info: 系统信息字典
-        返回值: True表示保存成功，False表示失败
-        异常情况: 写入失败时返回False
+        批量更新心跳相关字段（IP 信息、系统信息、最后心跳时间）。
+        在非首次运行的每次心跳后调用。
         """
         with self._lock:
-            self._config["ip_info"] = ip_info
-            self._config["os_info"] = os_info
+            self._config["ip_info"]             = ip_info
+            self._config["os_info"]             = os_info
             self._config["last_heartbeat_time"] = get_timestamp()
             return self._save_config()
-    
+
+    # -------------------------------------------------------------------------
+    # Web 日志偏移量
+    # -------------------------------------------------------------------------
+
     def get_web_log_offsets(self) -> Dict[str, Dict]:
         """
-        获取Web日志文件读取偏移量（用于重启后续读）
-
-        返回值格式:
-            {
-                "/var/log/nginx/access.log": {
-                    "offset": 102400,       # 下次应从此字节位置开始读取
-                    "size":   102400,       # 上次读取时的文件大小
-                    "mtime":  1708400000.0  # 上次读取时的文件修改时间
-                },
-                ...
-            }
-        说明: 由 web_attack_detector 在停止时和每60秒定期写入，
-              启动时读取以恢复读取位置，避免重复检测历史日志
+        获取 Web 日志文件读取偏移量映射。
+        格式: {"/path/to/access.log": {"offset": 102400, "size": 102400, "mtime": ..., "inode": ...}}
         """
         with self._lock:
             offsets = self._config.get("web_log_offsets", {})
             return dict(offsets) if isinstance(offsets, dict) else {}
 
     def set_web_log_offsets(self, offsets: Dict[str, Dict]) -> bool:
-        """
-        持久化保存Web日志文件读取偏移量
-
-        参数:
-            offsets: 文件路径 -> 偏移量信息字典的映射
-        返回值: True表示保存成功，False表示失败
-        """
+        """持久化保存 Web 日志文件读取偏移量"""
         with self._lock:
             self._config["web_log_offsets"] = offsets
             return self._save_config()
 
+    # -------------------------------------------------------------------------
+    # Web 日志源配置
+    # -------------------------------------------------------------------------
+
     def get_web_log_sources(self) -> List[Dict]:
         """
-        获取Web日志源配置列表
-
-        功能: 返回配置的Web服务器日志文件/目录路径列表
-        返回值: 日志源配置列表，每项格式为:
-            {
-                "path":    "/var/log/nginx/access.log",  # 文件或目录路径
-                "type":    "nginx",   # nginx | apache | iis | tomcat | auto
-                "enabled": true       # 是否启用
-            }
-        说明: 若尚未配置则返回空列表，检测器将自动发现系统日志
+        获取 Web 日志源配置列表。
+        每项格式: {"path": "/var/log/nginx/access.log", "type": "nginx", "enabled": true}
         """
         with self._lock:
             sources = self._config.get("web_log_sources", [])
             return list(sources) if isinstance(sources, list) else []
 
     def set_web_log_sources(self, sources: List[Dict]) -> bool:
-        """
-        设置Web日志源配置列表
-
-        功能: 持久化保存Web服务器日志文件/目录路径配置
-        参数:
-            sources: 日志源配置列表，每项包含 path、type、enabled 字段
-        返回值: True表示保存成功，False表示失败
-        示例:
-            config_manager.set_web_log_sources([
-                {"path": "/var/log/nginx/access.log",  "type": "nginx",  "enabled": True},
-                {"path": "/opt/tomcat/logs",           "type": "tomcat", "enabled": True},
-                {"path": r"C:\\inetpub\\logs\\LogFiles", "type": "iis", "enabled": True},
-            ])
-        """
+        """持久化保存 Web 日志源配置列表"""
         with self._lock:
             self._config["web_log_sources"] = sources
             return self._save_config()
 
+    # -------------------------------------------------------------------------
+    # 工具方法
+    # -------------------------------------------------------------------------
+
     def get_all_config(self) -> Dict:
-        """
-        获取所有配置
-        
-        功能: 返回完整的配置字典副本
-        参数: 无
-        返回值: 配置字典的副本
-        异常情况: 无
-        """
+        """返回完整配置字典的副本（含 settings 节和运行时状态）"""
         with self._lock:
             return self._config.copy()
-    
+
     def clear_config(self) -> bool:
         """
-        清空配置
-        
-        功能: 删除所有配置数据
-        参数: 无
-        返回值: True表示成功，False表示失败
-        异常情况: 无
-        
-        警告: 此操作不可逆，慎用
+        清空所有配置数据并持久化。
+        警告：此操作不可逆，清空后程序下次启动将视为首次运行。
         """
         with self._lock:
             self._config = {}
             return self._save_config()
-    
+
     @property
     def config_dir(self) -> str:
-        """获取配置目录路径"""
+        """配置文件所在目录路径（即项目目录）"""
         return self._config_dir
-    
+
     @property
     def config_file(self) -> str:
-        """获取配置文件路径"""
+        """配置文件完整路径"""
         return self._config_file
 
 
-# 创建全局配置管理器实例
+# 全局单例
 config_manager = ConfigManager()

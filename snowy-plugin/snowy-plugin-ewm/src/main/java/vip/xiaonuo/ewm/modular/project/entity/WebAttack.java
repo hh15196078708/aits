@@ -10,7 +10,7 @@ import org.springframework.data.mongodb.core.mapping.Field;
 import java.util.Date;
 
 @Data
-@Document(collection = "attack_port_scan")
+@Document(collection = "web_attack")
 public class WebAttack {
 
     @Id
@@ -56,4 +56,7 @@ public class WebAttack {
     //referer
     @Field("referer")
     private String referer;
+
+    @Field("level")
+    private String level;
 }
