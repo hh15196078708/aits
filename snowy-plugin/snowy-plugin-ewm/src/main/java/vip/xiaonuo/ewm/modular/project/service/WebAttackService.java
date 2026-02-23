@@ -48,6 +48,18 @@ public class WebAttackService {
                 webAttack.setUserAgent(log.getUserAgent());
                 webAttack.setReferer(log.getReferer());
                 webAttack.setLevel(log.getLevel());
+                webAttack.setDestPort(log.getDestPort());
+                webAttack.setProtocol(log.getProtocol());
+                webAttack.setPayloadSnippet(log.getPayloadSnippet());
+                List<Integer> targetPorts = log.getTargetPorts();
+                String targetPortsStr = "";
+                //数组转JSON字符串
+                if(ObjectUtil.isNotEmpty(targetPorts) && targetPorts.size() > 0){
+                    targetPortsStr = targetPorts.toString();
+                }
+                webAttack.setTargetPorts(targetPortsStr);
+                webAttack.setScanType(log.getScanType());
+                webAttack.setDuration(log.getDuration());
                 webAttackRepository.save(webAttack);
             }
             return CommonResult.ok();

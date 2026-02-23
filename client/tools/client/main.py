@@ -27,7 +27,8 @@ from constants import (
     AUTH_STATUS_EXPIRED,  # 授权到期状态
     AUTH_STATUS_NORMAL,  # 授权正常状态
     MIN_PYTHON_VERSION,  # 最低Python版本
-    PROJECT_ID
+    PROJECT_ID,
+    WSS_BASE_URL,        # WSS 基础地址（连接时末尾拼接 /{clientId}）
 )
 from utils import check_python_version, format_datetime, get_timestamp  # 工具函数
 from system_adapter import system_adapter  # 系统适配器
@@ -38,6 +39,7 @@ from network_client import network_client  # 网络客户端
 from auth_manager import auth_manager  # 授权管理器
 from resource_monitor import resource_monitor  # 资源监控器
 from traffic_collector import traffic_collector  # 流量采集器
+from wss_client import wss_client, WEBSOCKET_AVAILABLE  # WSS 长连接客户端
 
 
 
@@ -62,11 +64,12 @@ class ClientApplication:
         异常情况: 无
         """
         self._running = False  # 运行标志
-        self._heartbeat_thread: Optional[threading.Thread] = None  # 心跳线程
+        self._heartbeat_thread: Optional[threading.Thread] = None  # HTTP心跳线程（WSS不可用时的回退）
         self._stop_event = threading.Event()  # 停止事件
         self._client_id: str = ""  # 客户端ID（服务端分配）
         self._machine_code: str = ""  # 机器码
         self._auth_key: str = ""  # 授权密钥
+        self._use_wss: bool = False  # 是否使用WSS连接（True=WSS，False=HTTP心跳）
     
     def run(self) -> int:
         """
@@ -103,8 +106,8 @@ class ClientApplication:
             # 步骤7：启动流量采集与攻击检测（端口扫描等）
             traffic_collector.start()
 
-            # 步骤8：启动心跳
-            self._start_heartbeat()
+            # 步骤8：启动WSS长连接（心跳+指令接收），不可用时回退HTTP心跳
+            self._start_wss()
 
             # 步骤9：主循环等待
             self._main_loop()
@@ -344,11 +347,64 @@ class ClientApplication:
     
 
 
+    def _start_wss(self) -> None:
+        """
+        启动 WSS 长连接
+
+        功能:
+            注册完成后建立 WSS 持久连接，用于心跳和接收服务端指令。
+            若 websocket-client 未安装，自动回退到 HTTP 心跳模式。
+        参数: 无
+        返回值: 无
+        异常情况: 无
+        """
+        if not WEBSOCKET_AVAILABLE:
+            logger.warning(
+                "websocket-client 未安装，回退使用HTTP心跳模式。"
+                "如需WSS支持，请执行: pip install websocket-client>=1.6.0"
+            )
+            self._start_heartbeat()
+            return
+
+        success = wss_client.start(
+            client_id=self._client_id,
+            machine_code=self._machine_code,
+            auth_key=self._auth_key,
+            on_auth_expired=self._on_wss_auth_expired,
+            on_shutdown=self._on_wss_shutdown,
+        )
+
+        if success:
+            self._use_wss = True
+            logger.info(f"WSS长连接已启动，地址: {WSS_BASE_URL}/{self._client_id}")
+        else:
+            logger.warning("WSS连接启动失败，回退使用HTTP心跳模式")
+            self._start_heartbeat()
+
+    def _on_wss_auth_expired(self) -> None:
+        """
+        WSS授权到期回调
+
+        功能: 收到服务端授权到期通知时触发程序退出
+        """
+        logger.warning("WSS收到授权到期通知，程序将退出")
+        self._stop_event.set()
+
+    def _on_wss_shutdown(self) -> None:
+        """
+        WSS关机指令回调
+
+        功能: 收到服务端关机指令时触发程序优雅退出
+        """
+        logger.info("WSS收到关机指令，程序开始退出...")
+        self._stop_event.set()
+        auth_manager.request_shutdown()
+
     def _start_heartbeat(self) -> None:
         """
-        启动心跳线程
+        启动HTTP心跳线程（WSS不可用时的回退方案）
 
-        功能: 创建并启动心跳发送线程
+        功能: 创建并启动HTTP心跳发送线程
         参数: 无
         返回值: 无
         异常情况: 无
@@ -360,7 +416,7 @@ class ClientApplication:
             daemon=True
         )
         self._heartbeat_thread.start()
-        logger.info(f"心跳线程已启动，间隔{HEARTBEAT_INTERVAL}秒")
+        logger.info(f"HTTP心跳线程已启动，间隔{HEARTBEAT_INTERVAL}秒")
     
     def _heartbeat_loop(self) -> None:
         """
@@ -482,9 +538,15 @@ class ClientApplication:
         except Exception:
             pass
 
-        # 等待心跳线程结束
-        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
-            self._heartbeat_thread.join(timeout=2)
+        # 停止 WSS 连接或 HTTP 心跳线程
+        if self._use_wss:
+            try:
+                wss_client.stop()
+            except Exception:
+                pass
+        else:
+            if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+                self._heartbeat_thread.join(timeout=2)
 
         # 关闭网络客户端
         try:

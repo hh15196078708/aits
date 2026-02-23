@@ -83,18 +83,30 @@ class PortScanEvent:
     detection_method: str    # 检测方式: connection / packet / log
 
     def to_dict(self) -> dict:
-        """序列化为可上报的字典"""
+        """序列化为统一上报格式的字典（字段与 WebAttackEvent/PayloadAttackEvent 对齐）"""
         return {
-            "attack_type": ATTACK_TYPE_PORT_SCAN,
-            "source_ip": self.source_ip,
-            "target_ports": sorted(self.target_ports)[:50],  # 最多记录50个端口
-            "port_count": self.port_count,
-            "scan_type": self.scan_type,
-            "start_time": self.start_time,
-            "end_time": self.end_time,
-            "duration": round(self.end_time - self.start_time, 2),
-            "level": self.level,
+            # ── 公共字段 ──────────────────────────────────────────────────────
+            "attack_type":      ATTACK_TYPE_PORT_SCAN,
+            "source_ip":        self.source_ip,
+            "level":            self.level,
             "detection_method": self.detection_method,
+            "timestamp":        self.end_time,
+            "matched_pattern":  f"{self.scan_type}，共{self.port_count}个端口",
+            # ── Web/Payload 字段（端口扫描不适用，填空占位）──────────────────
+            "request_uri":      "",
+            "request_method":   "",
+            "user_agent":       "",
+            "referer":          "",
+            "dest_port":        None,
+            "protocol":         "",
+            "payload_snippet":  "",
+            # ── 端口扫描专属字段 ──────────────────────────────────────────────
+            "target_ports":     sorted(self.target_ports)[:50],
+            "port_count":       self.port_count,
+            "scan_type":        self.scan_type,
+            "start_time":       self.start_time,
+            "end_time":         self.end_time,
+            "duration":         round(self.end_time - self.start_time, 2),
         }
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ import vip.xiaonuo.ewm.modular.project.service.AttackPortScanService;
 import vip.xiaonuo.ewm.modular.project.service.EwmProjectSafeService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import vip.xiaonuo.ewm.modular.project.service.SafeHardwareService;
+import vip.xiaonuo.ewm.modular.project.service.SafeWebSocketService;
 import vip.xiaonuo.ewm.modular.project.service.WebAttackService;
 
 import java.util.List;
@@ -42,6 +43,9 @@ public class EwmProjectSafeController {
 
     @Resource
     private WebAttackService webAttackService;
+
+    @Resource
+    private SafeWebSocketService safeWebSocketService;
 
     /**
      * 获取网络安全的客户端分页
@@ -114,5 +118,37 @@ public class EwmProjectSafeController {
     public CommonResult<Page<WebAttack>> webAttackpage(WebAttackPageParam webAttackPageParam) {
         Page<WebAttack> page = webAttackService.page(webAttackPageParam);
         return CommonResult.data(page);
+    }
+
+    // ----------------------------------------------------------------
+    // WSS 指令下发接口
+    // ----------------------------------------------------------------
+
+    @Operation(summary = "下发自动拉黑开关指令")
+    @CommonLog("下发自动拉黑开关指令")
+    @PostMapping("/ws/command/autoblock")
+    public CommonResult<String> wsCmdAutoBlock(@RequestBody @Validated WsAutoBlockParam param) {
+        return safeWebSocketService.sendAutoBlock(param);
+    }
+
+    @Operation(summary = "下发封禁IP指令")
+    @CommonLog("下发封禁IP指令")
+    @PostMapping("/ws/command/blockip")
+    public CommonResult<String> wsCmdBlockIp(@RequestBody @Validated WsBlockIpParam param) {
+        return safeWebSocketService.sendBlockIp(param);
+    }
+
+    @Operation(summary = "下发IP白名单更新指令")
+    @CommonLog("下发IP白名单更新指令")
+    @PostMapping("/ws/command/whitelist")
+    public CommonResult<String> wsCmdWhitelist(@RequestBody @Validated WsWhitelistParam param) {
+        return safeWebSocketService.sendWhitelist(param);
+    }
+
+    @Operation(summary = "下发关机指令")
+    @CommonLog("下发关机指令")
+    @PostMapping("/ws/command/shutdown")
+    public CommonResult<String> wsCmdShutdown(@RequestBody @Validated WsClientIdParam param) {
+        return safeWebSocketService.sendShutdown(param);
     }
 }

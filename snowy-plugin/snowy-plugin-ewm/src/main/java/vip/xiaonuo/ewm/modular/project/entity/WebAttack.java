@@ -1,6 +1,7 @@
 package vip.xiaonuo.ewm.modular.project.entity;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import org.springframework.data.annotation.Id;
@@ -16,6 +17,7 @@ public class WebAttack {
     @Id
     private String id;
 
+    //公共参数
     @Field("project_id")
     @NotBlank(message = "项目不能为空")
     private String projectId;
@@ -34,7 +36,11 @@ public class WebAttack {
     @Field("source_ip")
     private String sourceIp;
 
-    //request_uri
+    @Field("level")
+    private String level;
+    //公共参数
+
+    //web_attack参数
     @Field("request_uri")
     private String requestUri;
 
@@ -56,7 +62,28 @@ public class WebAttack {
     //referer
     @Field("referer")
     private String referer;
+    //web_attack参数
 
-    @Field("level")
-    private String level;
+
+    //dest_port
+    @JsonProperty("dest_port")
+    private String destPort;
+
+    //protocol
+    @JsonProperty("protocol")
+    private String protocol;
+
+    //payload_snippet
+    @JsonProperty("payload_snippet")
+    private String payloadSnippet;
+
+
+    @Field("scan_type")
+    private String scanType;
+
+    @Field("target_ports")
+    private String targetPorts;
+
+    @Field("duration")
+    private String duration;
 }

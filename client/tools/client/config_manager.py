@@ -374,6 +374,38 @@ class ConfigManager:
             return self._save_config()
 
     # -------------------------------------------------------------------------
+    # IP 白名单
+    # -------------------------------------------------------------------------
+
+    def get_ip_whitelist(self) -> List[str]:
+        """获取服务端下发的IP白名单列表"""
+        with self._lock:
+            wl = self._config.get("ip_whitelist", [])
+            return list(wl) if isinstance(wl, list) else []
+
+    def set_ip_whitelist(self, whitelist: List[str]) -> bool:
+        """持久化保存IP白名单列表"""
+        with self._lock:
+            self._config["ip_whitelist"] = whitelist
+            return self._save_config()
+
+    # -------------------------------------------------------------------------
+    # 已封禁 IP 列表
+    # -------------------------------------------------------------------------
+
+    def get_blocked_ips(self) -> List[str]:
+        """获取已封禁的IP列表"""
+        with self._lock:
+            blocked = self._config.get("blocked_ips", [])
+            return list(blocked) if isinstance(blocked, list) else []
+
+    def set_blocked_ips(self, blocked_ips: List[str]) -> bool:
+        """持久化保存已封禁的IP列表"""
+        with self._lock:
+            self._config["blocked_ips"] = blocked_ips
+            return self._save_config()
+
+    # -------------------------------------------------------------------------
     # 工具方法
     # -------------------------------------------------------------------------
 

@@ -1,6 +1,7 @@
 import { baseRequest } from '@/utils/request'
 
 const request = (url, ...arg) => baseRequest(`/safe/projectsafe/` + url, ...arg)
+const wsRequest = (url, ...arg) => baseRequest(`/safe/ws/command/` + url, ...arg)
 
 /**
  * 网络安全的客户端Api接口管理器
@@ -14,8 +15,22 @@ export default {
 		return request('page', data, 'get')
 	},
 
-	// 获取硬件监控数据 (新增)
+	// 获取硬件监控数据
 	monitor(data) {
 		return request('monitor', data, 'get')
+	},
+
+	// WSS 指令下发
+	sendAutoBlock(data) {
+		return wsRequest('autoblock', data)
+	},
+	sendBlockIp(data) {
+		return wsRequest('blockip', data)
+	},
+	sendWhitelist(data) {
+		return wsRequest('whitelist', data)
+	},
+	sendShutdown(data) {
+		return wsRequest('shutdown', data)
 	}
 }

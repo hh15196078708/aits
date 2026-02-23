@@ -70,8 +70,8 @@
 				<template v-if="column.dataIndex === 'action'">
 					<a-space>
 						<a @click="handleMonitor(record)">监控</a>
-						<a @click="handlePortScan(record)">端口扫描</a>
-						<a @click="handleWebAttack(record)">web攻击日志</a>
+<!--						<a @click="handlePortScan(record)">端口扫描</a>-->
+						<a @click="handleWebAttack(record)">检测日志</a>
 <!--						<a-divider type="vertical" v-if="hasPerm('ewmProjectSafeEdit')" />-->
 <!--						<a @click="formRef.onOpen(record)" v-if="hasPerm('ewmProjectSafeEdit')">编辑</a>-->
 <!--						<a-divider type="vertical" v-if="hasPerm(['ewmProjectSafeEdit', 'ewmProjectSafeDelete'], 'and')" />-->

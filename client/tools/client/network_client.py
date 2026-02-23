@@ -27,8 +27,8 @@ from constants import (
     SERVER_URL,  # 服务端地址
     REGISTER_ENDPOINT,  # 注册接口
     HEARTBEAT_ENDPOINT,  # 心跳接口
-    ATTACK_LOG_UPLOAD_ENDPOINT,  # 端口扫描日志上报接口
-    ATTACK_LOG_WEB_UPLOAD_ENDPOINT,  # Web攻击日志上报接口
+    ATTACK_LOG_UNIFIED_ENDPOINT,        # 统一攻击日志上报接口（所有攻击类型）
+    IP_WHITELIST_ENDPOINT,              # IP白名单拉取接口
     REQUEST_TIMEOUT,  # 请求超时
     MAX_RETRY,  # 最大重试次数
     RETRY_INTERVAL,  # 重试间隔
@@ -463,75 +463,12 @@ class NetworkClient:
         except Exception as e:
             return False, f"响应解析失败: {str(e)}"
     
-    def upload_attack_logs(self, client_id: str,events: List[dict]) -> Tuple[bool, str]:
+    def upload_attack_logs(self, client_id: str, events: List[dict]) -> Tuple[bool, str]:
         """
-        批量上报攻击检测日志
+        统一攻击日志上报接口（所有攻击类型）。
 
-        功能: 将检测到的攻击事件（端口扫描等）上报至服务端
-        参数:
-            events: 攻击事件字典列表，每个元素由各检测器的 to_dict() 生成
-        返回值: (成功标志, 错误信息)
-        异常情况: 网络失败时返回错误信息，由调用方决定是否重试
-
-        请求格式:
-        {
-            "projectId": "项目ID",
-            "logs": [
-                {
-                    "attack_type": "port_scan",
-                    "source_ip": "1.2.3.4",
-                    "port_count": 35,
-                    "scan_type": "syn_scan",
-                    "level": "high",
-                    "detection_method": "packet",
-                    "start_time": 1700000000.0,
-                    "end_time": 1700000010.0,
-                    "target_ports": [22, 80, 443, ...]
-                },
-                ...
-            ]
-        }
-        """
-        if not events:
-            return True, ""
-
-        request_data = {
-            "projectId": PROJECT_ID,
-            "clientId":client_id,
-            "logs": events,
-        }
-
-        url = f"{self._server_url}{ATTACK_LOG_UPLOAD_ENDPOINT}"
-
-        print(request_data)
-        print(url)
-        print("======================")
-
-        # 上报日志使用单次请求（不重试，由上层负责重试逻辑）
-        success, resp_data, error = self._make_request(url, request_data)
-
-        if not success:
-            return False, error
-
-        try:
-            code = resp_data.get("code") if resp_data else None
-            if code in (200, RESPONSE_CODE_SUCCESS):
-                return True, ""
-            msg = (resp_data or {}).get("msg") or (resp_data or {}).get("message", "未知错误")
-            return False, f"服务端拒绝: {msg}"
-        except Exception as e:
-            return False, f"响应解析失败: {e}"
-
-    def upload_web_attack_logs(self, client_id: str, events: List[dict]) -> Tuple[bool, str]:
-        """
-        批量上报Web攻击检测日志
-
-        功能: 将检测到的Web攻击事件（SQL注入/XSS/目录遍历/命令注入/CSRF/RCE等）上报至服务端
-        参数:
-            client_id: 客户端唯一标识
-            events:    攻击事件字典列表，每个元素由 WebAttackEvent.to_dict() 生成
-        返回值: (成功标志, 错误信息)
-        异常情况: 网络失败时返回错误信息，由调用方决定是否重试
+        所有检测模块（端口扫描/Web日志/Payload抓包/进程监控）的事件
+        均通过本方法上报至同一服务端接口，不再区分攻击来源。
 
         请求格式:
         {
@@ -539,20 +476,34 @@ class NetworkClient:
             "clientId":  "客户端ID",
             "logs": [
                 {
-                    "attack_type":      "sql_injection",
+                    // ── 公共字段（所有攻击类型）────────────────────────────
+                    "attack_type":      "sql_injection | port_scan | ...",
                     "source_ip":        "1.2.3.4",
-                    "request_uri":      "/index.php?id=1 UNION SELECT ...",
-                    "request_method":   "GET",
-                    "matched_pattern":  "UNION SELECT注入",
+                    "level":            "low | medium | high",
+                    "detection_method": "log | payload_capture | packet | ...",
                     "timestamp":        1700000000.0,
-                    "level":            "high",
-                    "detection_method": "log",
-                    "user_agent":       "...",
-                    "referer":          "..."
+                    "matched_pattern":  "命中的规则描述",
+                    // ── Web/Payload 字段（端口扫描填空）────────────────────
+                    "request_uri":      "/index.php?id=1 union select ...",
+                    "request_method":   "GET | POST | ...",
+                    "user_agent":       "Mozilla/5.0 ...",
+                    "referer":          "https://...",
+                    "dest_port":        80,
+                    "protocol":         "TCP",
+                    "payload_snippet":  "union select 1,2,3--",
+                    // ── 端口扫描字段（其他攻击类型填空/零）────────────────
+                    "target_ports":     [22, 80, 443, ...],
+                    "port_count":       35,
+                    "scan_type":        "syn_scan | connect_scan | ...",
+                    "start_time":       1700000000.0,
+                    "end_time":         1700000010.0,
+                    "duration":         10.0
                 },
                 ...
             ]
         }
+
+        上报使用单次请求（不重试），由上层 TrafficCollector 负责重试逻辑。
         """
         if not events:
             return True, ""
@@ -563,9 +514,10 @@ class NetworkClient:
             "logs":      events,
         }
 
-        url = f"{self._server_url}{ATTACK_LOG_WEB_UPLOAD_ENDPOINT}"
+        print(request_data)
+        print("================")
 
-        # 上报日志使用单次请求（不重试，由上层负责重试逻辑）
+        url = f"{self._server_url}{ATTACK_LOG_UNIFIED_ENDPOINT}"
         success, resp_data, error = self._make_request(url, request_data)
 
         if not success:
@@ -577,8 +529,54 @@ class NetworkClient:
                 return True, ""
             msg = (resp_data or {}).get("msg") or (resp_data or {}).get("message", "未知错误")
             return False, f"服务端拒绝: {msg}"
+        except Exception as exc:
+            return False, f"响应解析失败: {exc}"
+
+    def fetch_ip_whitelist(self, client_id: str) -> Tuple[bool, Optional[List], str]:
+        """
+        从服务端拉取IP白名单列表。
+
+        功能: 获取服务端下发的白名单IP，客户端不对白名单IP执行封禁
+        参数:
+            client_id: 客户端ID（服务端分配）
+        返回值: (成功标志, IP列表或None, 错误信息)
+
+        请求格式:
+        {
+            "projectId": "项目ID",
+            "clientId":  "客户端ID"
+        }
+
+        响应格式:
+        {
+            "code": 200,
+            "data": {
+                "whitelist": ["1.2.3.4", "10.0.0.0/8", ...]
+            }
+        }
+        """
+        request_data = {
+            "projectId": PROJECT_ID,
+            "clientId":  client_id,
+        }
+        url = f"{self._server_url}{IP_WHITELIST_ENDPOINT}"
+        success, resp_data, error = self._make_request(url, request_data)
+
+        if not success:
+            return False, None, error
+
+        try:
+            code = resp_data.get("code") if resp_data else None
+            if code in (200, RESPONSE_CODE_SUCCESS):
+                data = resp_data.get("data") or {}
+                whitelist = data.get("whitelist", [])
+                if isinstance(whitelist, list):
+                    return True, whitelist, ""
+                return True, [], ""
+            msg = (resp_data or {}).get("msg") or (resp_data or {}).get("message", "未知错误")
+            return False, None, f"服务端拒绝: {msg}"
         except Exception as e:
-            return False, f"响应解析失败: {e}"
+            return False, None, f"响应解析失败: {e}"
 
     def check_connection(self) -> Tuple[bool, str]:
         """

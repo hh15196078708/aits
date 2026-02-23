@@ -163,4 +163,64 @@ public class EwmProjectSafeServiceImpl extends ServiceImpl<EwmProjectSafeMapper,
         safeHardwareService.save(safeHardware);
         return CommonResult.ok("终端授权有效");
     }
+
+    @Override
+    public boolean checkWsHeartbeat(EwmProjectSafeCheckParam param) {
+        // 1. 根据ID查询
+        EwmProjectSafe safe = this.getById(param.getId());
+        if (ObjectUtil.isEmpty(safe)) return false;
+
+        // 2. 校验所属项目
+        if (!safe.getProjectId().equals(param.getProjectId())) return false;
+
+        // 3. 校验机器码
+        if (!safe.getSafeCode().equals(param.getSafeCode())) return false;
+
+        // 4. 校验密钥
+        if (!safe.getSafeSecret().equals(param.getSafeSecret())) return false;
+
+        // 5. 校验授权时间
+        Date now = new Date();
+        if (ObjectUtil.isNotEmpty(safe.getSafeStartTime()) && now.before(safe.getSafeStartTime())) return false;
+        if (ObjectUtil.isNotEmpty(safe.getSafeEndTime()) && now.after(safe.getSafeEndTime())) return false;
+
+        // 6. 更新 MySQL 在线状态与硬件数据
+        safe.setSafeStatus("ON");
+        safe.setUpdateTime(now);
+        safe.setSafeCpu(param.getSafeCpu());
+        safe.setSafeCpuUsage(param.getSafeCpuUsage());
+        safe.setSafeMemory(param.getSafeMemory());
+        safe.setSafeMemoryUsage(param.getSafeMemoryUsage());
+        safe.setSafeDisk(param.getSafeDisk());
+        safe.setSafeDiskUsage(param.getSafeDiskUsage());
+        this.updateById(safe);
+
+        // 7. 更新 MongoDB 硬件监控数据
+        SafeHardware hw = new SafeHardware();
+        hw.setSafeId(safe.getId());
+        hw.setProjectId(safe.getProjectId());
+        hw.setSafeCpu(param.getSafeCpu());
+        hw.setSafeCpuUsage(param.getSafeCpuUsage());
+        hw.setSafeMemory(param.getSafeMemory());
+        hw.setSafeMemoryUsage(param.getSafeMemoryUsage());
+        hw.setSafeDisk(param.getSafeDisk());
+        hw.setSafeDiskUsage(param.getSafeDiskUsage());
+        hw.setCreateTime(now);
+        hw.setSafeOs(safe.getSafeOs());
+        hw.setSafeIp(safe.getSafeIp());
+        hw.setSafeName(safe.getSafeName());
+        safeHardwareService.save(hw);
+
+        return true;
+    }
+
+    @Override
+    public void updateOnlineStatus(String safeId, String status) {
+        EwmProjectSafe safe = this.getById(safeId);
+        if (ObjectUtil.isNotEmpty(safe)) {
+            safe.setSafeStatus(status);
+            safe.setUpdateTime(new Date());
+            this.updateById(safe);
+        }
+    }
 }

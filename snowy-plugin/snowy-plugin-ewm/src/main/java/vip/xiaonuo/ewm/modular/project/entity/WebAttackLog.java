@@ -36,4 +36,29 @@ public class WebAttackLog {
 
     @JsonProperty("referer")
     private String referer;
+
+    //dest_port
+    @JsonProperty("dest_port")
+    private String destPort;
+
+    //protocol
+    @JsonProperty("protocol")
+    private String protocol;
+
+    //payload_snippet
+    @JsonProperty("payload_snippet")
+    private String payloadSnippet;
+
+    @JsonProperty("target_ports")
+    private List<Integer> targetPorts;
+
+    @JsonProperty("port_count")
+    private Integer portCount;
+
+    @JsonProperty("scan_type")
+    private String scanType;
+
+    @JsonProperty("duration")
+    private String duration;
+
 }
