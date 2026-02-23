@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import vip.xiaonuo.common.annotation.CommonLog;
 import vip.xiaonuo.common.pojo.CommonResult;
 import vip.xiaonuo.ewm.modular.project.entity.*;
+import vip.xiaonuo.ewm.modular.project.param.AttackPortScanPageParam;
 import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafeAddParam;
 import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafeCheckParam;
 import vip.xiaonuo.ewm.modular.project.param.EwmProjectSafePageParam;
@@ -81,8 +82,20 @@ public class EwmProjectSafeController {
     }
 
     @Operation(summary = "端口扫描日志上传")
-    @PostMapping("/attack/portscan")
+    @PostMapping("/init/attack/portscan")
     public CommonResult<String> portScan(@RequestBody PortScanReportRequest attackPortScan){
         return attackPortScanService.save(attackPortScan);
+    }
+
+
+
+    /**
+     * 获取端口扫描记录分页 (来自 MongoDB)
+     */
+    @Operation(summary = "获取端口扫描记录分页")
+    @GetMapping("/portscan/page")
+    public CommonResult<Page<AttackPortScan>> page(AttackPortScanPageParam attackPortScanPageParam) {
+        Page<AttackPortScan> page = attackPortScanService.page(attackPortScanPageParam);
+        return CommonResult.data(page);
     }
 }

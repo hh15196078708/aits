@@ -168,7 +168,8 @@ RULE_LIB_FILE_PATH = "data/rule_lib.json"  # 特征库本地存储路径
 RULE_LIB_BACKUP_PATH = "data/rule_lib.backup.json"  # 特征库备份路径
 
 # 攻击日志上传配置
-ATTACK_LOG_UPLOAD_ENDPOINT = "/attack/portscan"  # 攻击日志上传接口
+ATTACK_LOG_UPLOAD_ENDPOINT = "/init/attack/portscan"  # 端口扫描日志上传接口
+ATTACK_LOG_WEB_UPLOAD_ENDPOINT = "/init/attack/web"  # Web攻击日志上传接口
 ATTACK_LOG_BATCH_SIZE = 50  # 批量上传日志数量
 ATTACK_LOG_UPLOAD_INTERVAL = 30  # 日志上传间隔，单位：秒
 
@@ -188,6 +189,10 @@ ATTACK_TYPE_BRUTE_FORCE = "brute_force"  # 暴力破解
 ATTACK_TYPE_PORT_SCAN = "port_scan"  # 端口扫描
 ATTACK_TYPE_SQL_INJECTION = "sql_injection"  # SQL注入
 ATTACK_TYPE_XSS = "xss_attempt"  # XSS攻击
+ATTACK_TYPE_DIR_TRAVERSAL = "dir_traversal"  # 目录遍历攻击
+ATTACK_TYPE_CMD_INJECTION = "cmd_injection"  # 命令注入攻击
+ATTACK_TYPE_CSRF = "csrf_attempt"  # CSRF攻击
+ATTACK_TYPE_RCE = "rce_attempt"  # 远程代码执行攻击
 ATTACK_TYPE_TRAFFIC_BURST = "traffic_burst"  # 异常流量突发
 ATTACK_TYPE_MALWARE_C2 = "malware_c2"  # 恶意软件外联
 
@@ -211,6 +216,11 @@ DEFAULT_THRESHOLDS = {
     # 端口扫描阈值
     "port_scan_port_count": 20,  # 扫描端口数量阈值
     "port_scan_time_window": 10,  # 时间窗口（秒）
+
+    # Web攻击检测阈值
+    "web_attack_check_interval": 10,  # Web日志扫描间隔（秒）
+    "web_attack_cooldown": 60,  # 同一IP同类攻击告警冷却时间（秒）
+    "web_attack_log_tail_size": 65536,  # 首次读取日志末尾大小（字节，64KB）
 
     # 异常流量突发阈值
     "traffic_burst_baseline_multiplier": 2.0,  # 基线倍数（200%）

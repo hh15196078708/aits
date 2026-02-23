@@ -17,7 +17,7 @@
 import os  # 操作系统接口
 import json  # JSON序列化
 import threading  # 线程模块
-from typing import Any, Dict, Optional  # 类型提示
+from typing import Any, Dict, List, Optional  # 类型提示
 
 # 导入本地模块
 from constants import CONFIG_FILE_NAME  # 配置文件名
@@ -492,6 +492,74 @@ class ConfigManager:
             self._config["last_heartbeat_time"] = get_timestamp()
             return self._save_config()
     
+    def get_web_log_offsets(self) -> Dict[str, Dict]:
+        """
+        获取Web日志文件读取偏移量（用于重启后续读）
+
+        返回值格式:
+            {
+                "/var/log/nginx/access.log": {
+                    "offset": 102400,       # 下次应从此字节位置开始读取
+                    "size":   102400,       # 上次读取时的文件大小
+                    "mtime":  1708400000.0  # 上次读取时的文件修改时间
+                },
+                ...
+            }
+        说明: 由 web_attack_detector 在停止时和每60秒定期写入，
+              启动时读取以恢复读取位置，避免重复检测历史日志
+        """
+        with self._lock:
+            offsets = self._config.get("web_log_offsets", {})
+            return dict(offsets) if isinstance(offsets, dict) else {}
+
+    def set_web_log_offsets(self, offsets: Dict[str, Dict]) -> bool:
+        """
+        持久化保存Web日志文件读取偏移量
+
+        参数:
+            offsets: 文件路径 -> 偏移量信息字典的映射
+        返回值: True表示保存成功，False表示失败
+        """
+        with self._lock:
+            self._config["web_log_offsets"] = offsets
+            return self._save_config()
+
+    def get_web_log_sources(self) -> List[Dict]:
+        """
+        获取Web日志源配置列表
+
+        功能: 返回配置的Web服务器日志文件/目录路径列表
+        返回值: 日志源配置列表，每项格式为:
+            {
+                "path":    "/var/log/nginx/access.log",  # 文件或目录路径
+                "type":    "nginx",   # nginx | apache | iis | tomcat | auto
+                "enabled": true       # 是否启用
+            }
+        说明: 若尚未配置则返回空列表，检测器将自动发现系统日志
+        """
+        with self._lock:
+            sources = self._config.get("web_log_sources", [])
+            return list(sources) if isinstance(sources, list) else []
+
+    def set_web_log_sources(self, sources: List[Dict]) -> bool:
+        """
+        设置Web日志源配置列表
+
+        功能: 持久化保存Web服务器日志文件/目录路径配置
+        参数:
+            sources: 日志源配置列表，每项包含 path、type、enabled 字段
+        返回值: True表示保存成功，False表示失败
+        示例:
+            config_manager.set_web_log_sources([
+                {"path": "/var/log/nginx/access.log",  "type": "nginx",  "enabled": True},
+                {"path": "/opt/tomcat/logs",           "type": "tomcat", "enabled": True},
+                {"path": r"C:\\inetpub\\logs\\LogFiles", "type": "iis", "enabled": True},
+            ])
+        """
+        with self._lock:
+            self._config["web_log_sources"] = sources
+            return self._save_config()
+
     def get_all_config(self) -> Dict:
         """
         获取所有配置

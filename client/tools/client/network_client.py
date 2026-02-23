@@ -27,7 +27,8 @@ from constants import (
     SERVER_URL,  # 服务端地址
     REGISTER_ENDPOINT,  # 注册接口
     HEARTBEAT_ENDPOINT,  # 心跳接口
-    ATTACK_LOG_UPLOAD_ENDPOINT,  # 攻击日志上报接口
+    ATTACK_LOG_UPLOAD_ENDPOINT,  # 端口扫描日志上报接口
+    ATTACK_LOG_WEB_UPLOAD_ENDPOINT,  # Web攻击日志上报接口
     REQUEST_TIMEOUT,  # 请求超时
     MAX_RETRY,  # 最大重试次数
     RETRY_INTERVAL,  # 重试间隔
@@ -505,6 +506,64 @@ class NetworkClient:
         print(request_data)
         print(url)
         print("======================")
+
+        # 上报日志使用单次请求（不重试，由上层负责重试逻辑）
+        success, resp_data, error = self._make_request(url, request_data)
+
+        if not success:
+            return False, error
+
+        try:
+            code = resp_data.get("code") if resp_data else None
+            if code in (200, RESPONSE_CODE_SUCCESS):
+                return True, ""
+            msg = (resp_data or {}).get("msg") or (resp_data or {}).get("message", "未知错误")
+            return False, f"服务端拒绝: {msg}"
+        except Exception as e:
+            return False, f"响应解析失败: {e}"
+
+    def upload_web_attack_logs(self, client_id: str, events: List[dict]) -> Tuple[bool, str]:
+        """
+        批量上报Web攻击检测日志
+
+        功能: 将检测到的Web攻击事件（SQL注入/XSS/目录遍历/命令注入/CSRF/RCE等）上报至服务端
+        参数:
+            client_id: 客户端唯一标识
+            events:    攻击事件字典列表，每个元素由 WebAttackEvent.to_dict() 生成
+        返回值: (成功标志, 错误信息)
+        异常情况: 网络失败时返回错误信息，由调用方决定是否重试
+
+        请求格式:
+        {
+            "projectId": "项目ID",
+            "clientId":  "客户端ID",
+            "logs": [
+                {
+                    "attack_type":      "sql_injection",
+                    "source_ip":        "1.2.3.4",
+                    "request_uri":      "/index.php?id=1 UNION SELECT ...",
+                    "request_method":   "GET",
+                    "matched_pattern":  "UNION SELECT注入",
+                    "timestamp":        1700000000.0,
+                    "level":            "high",
+                    "detection_method": "log",
+                    "user_agent":       "...",
+                    "referer":          "..."
+                },
+                ...
+            ]
+        }
+        """
+        if not events:
+            return True, ""
+
+        request_data = {
+            "projectId": PROJECT_ID,
+            "clientId":  client_id,
+            "logs":      events,
+        }
+
+        url = f"{self._server_url}{ATTACK_LOG_WEB_UPLOAD_ENDPOINT}"
 
         # 上报日志使用单次请求（不重试，由上层负责重试逻辑）
         success, resp_data, error = self._make_request(url, request_data)
