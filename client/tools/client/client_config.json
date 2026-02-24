@@ -1,0 +1,131 @@
+{
+  "auth_cache": {
+    "status": "normal",
+    "update_time": 1771854164
+  },
+  "auth_key": "0dd1d47cd6a7c7ace1f9deb4cb8e9bd8",
+  "blocked_ips": [
+    "155.248.171.0"
+  ],
+  "client_id": "2023038625626255361",
+  "expire_time": "2026-03-15 22:16:09",
+  "first_run_time": null,
+  "ip_info": {
+    "external_ip": null,
+    "internal_ip": "192.168.101.110",
+    "source": "psutil"
+  },
+  "last_heartbeat_time": 1771854164,
+  "machine_code": "CRZ45M204LC",
+  "machine_name": "LAPTOP-3J63E0SU",
+  "os_info": {
+    "arch": "64bit",
+    "hostname": "LAPTOP-3J63E0SU",
+    "kernel": "10.0.26100",
+    "type": "Windows",
+    "version": "10.0.26100"
+  },
+  "settings": {
+    "attack_detection": {
+      "attack_detector_max_restart": 10,
+      "attack_detector_restart_delay": 3,
+      "attack_log_batch_size": 50,
+      "attack_log_upload_interval": 30,
+      "rule_lib_backup_path": "data/rule_lib.backup.json",
+      "rule_lib_file_path": "data/rule_lib.json",
+      "rule_lib_sync_interval": 600,
+      "thresholds": {
+        "brute_force_fail_count": 5,
+        "brute_force_time_window": 60,
+        "ddos_icmp_pps": 5000,
+        "ddos_syn_connections": 1000,
+        "ddos_traffic_mbps": 100,
+        "ddos_udp_pps": 10000,
+        "port_scan_port_count": 20,
+        "port_scan_time_window": 10,
+        "traffic_baseline_window": 600,
+        "traffic_burst_baseline_multiplier": 2.0,
+        "web_attack_check_interval": 10,
+        "web_attack_cooldown": 60,
+        "web_attack_log_tail_size": 65536
+      },
+      "traffic_baseline_samples": 100,
+      "traffic_collect_interval": 0.1,
+      "traffic_queue_max_size": 10000
+    },
+    "auth": {
+      "cache_ttl": 300,
+      "offline_grace_period": 600
+    },
+    "crypto": {
+      "aes_block_size": 16,
+      "aes_key_length": 128
+    },
+    "hardware": {
+      "cpu_usage_sample_interval": 0.5,
+      "machine_id_file": ".machine_id"
+    },
+    "heartbeat": {
+      "interval": 15,
+      "max_retry": 5,
+      "request_timeout": 5,
+      "retry_interval": 1
+    },
+    "logging": {
+      "backup_count": 5,
+      "buffer_size": 1024,
+      "file_prefix": "client",
+      "level": "INFO",
+      "max_size": 10485760
+    },
+    "payload_sniffer": {
+      "cooldown": 60,
+      "enabled": true,
+      "event_queue_max": 1000,
+      "max_payload_size": 4096,
+      "ports": [
+        80,
+        443,
+        8080,
+        8443
+      ],
+      "upload_interval": 10
+    },
+    "resources": {
+      "cpu_avg_limit": 5,
+      "cpu_peak_limit": 8,
+      "cpu_sample_interval": 5,
+      "cpu_throttle_sleep": 0.1,
+      "cpu_throttle_threshold": 7,
+      "disk_io_avg_limit": 1,
+      "disk_io_peak_limit": 10,
+      "disk_io_throttle_sleep": 0.5,
+      "disk_io_throttle_threshold": 9,
+      "memory_peak_limit": 300,
+      "memory_resident_limit": 100,
+      "memory_warning_threshold": 280
+    },
+    "server": {
+      "endpoints": {
+        "attack_portscan": "/init/attack/portscan",
+        "attack_threshold": "/attack/threshold/get",
+        "attack_traffic": "/init/attack/traffic",
+        "attack_web": "/init/attack/web",
+        "detector_status": "/attack/detector/status",
+        "heartbeat": "/init/check",
+        "register": "/init/add",
+        "rule_lib_update": "/attack/rule/update",
+        "rule_lib_version": "/attack/rule/version"
+      },
+      "project_id": "2023031623403520002",
+      "url": "http://127.0.0.1:82/safe"
+    },
+    "storage": {
+      "config_dir_name": "client_config",
+      "config_dir_name_unix": ".client_config",
+      "config_file_name": "client_config.json"
+    }
+  },
+  "web_log_offsets": {},
+  "web_log_sources": []
+}
