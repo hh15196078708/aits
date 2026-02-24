@@ -70,8 +70,8 @@
 				<template v-if="column.dataIndex === 'action'">
 					<a-space>
 						<a @click="handleMonitor(record)">监控</a>
-<!--						<a @click="handlePortScan(record)">端口扫描</a>-->
 						<a @click="handleWebAttack(record)">检测日志</a>
+						<a @click="configFormRef.onOpen(record)">配置</a>
 <!--						<a-divider type="vertical" v-if="hasPerm('ewmProjectSafeEdit')" />-->
 <!--						<a @click="formRef.onOpen(record)" v-if="hasPerm('ewmProjectSafeEdit')">编辑</a>-->
 <!--						<a-divider type="vertical" v-if="hasPerm(['ewmProjectSafeEdit', 'ewmProjectSafeDelete'], 'and')" />-->
@@ -83,6 +83,7 @@
 			</template>
 		</s-table>
 	</a-card>
+	<config-form ref="configFormRef" />
 </template>
 
 <script setup name="portscan">
@@ -91,12 +92,14 @@ import { useRouter } from 'vue-router'
 import { cloneDeep } from 'lodash-es'
 import ewmProjectSafeApi from '@/api/ewm/ewmProjectSafeApi'
 import ewmProjectApi from '@/api/ewm/ewmProjectApi'
+import ConfigForm from './configForm.vue'
 
 const router = useRouter()
 const tableRef = ref()
 const searchFormState = ref({})
 const searchFormRef = ref()
 const formRef = ref()
+const configFormRef = ref()
 const projectList = ref([])
 const toolConfig = { refresh: true, height: true, columnSetting: true, striped: false }
 
@@ -138,7 +141,7 @@ const columns = [
 		dataIndex: 'action',
 		align: 'center',
 		fixed: 'right',
-		width: 200
+		width: 250
 	}
 ]
 

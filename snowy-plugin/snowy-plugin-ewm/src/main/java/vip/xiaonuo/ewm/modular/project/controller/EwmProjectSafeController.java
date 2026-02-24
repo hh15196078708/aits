@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -13,11 +14,15 @@ import vip.xiaonuo.ewm.modular.project.entity.*;
 import vip.xiaonuo.ewm.modular.project.param.*;
 import vip.xiaonuo.ewm.modular.project.service.AttackPortScanService;
 import vip.xiaonuo.ewm.modular.project.service.EwmProjectSafeService;
+import vip.xiaonuo.ewm.modular.project.service.EwmSafeConfigService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import vip.xiaonuo.ewm.modular.project.service.SafeHardwareService;
 import vip.xiaonuo.ewm.modular.project.service.SafeWebSocketService;
 import vip.xiaonuo.ewm.modular.project.service.WebAttackService;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -46,6 +51,9 @@ public class EwmProjectSafeController {
 
     @Resource
     private SafeWebSocketService safeWebSocketService;
+
+    @Resource
+    private EwmSafeConfigService ewmSafeConfigService;
 
     /**
      * 获取网络安全的客户端分页
@@ -118,6 +126,36 @@ public class EwmProjectSafeController {
     public CommonResult<Page<WebAttack>> webAttackpage(WebAttackPageParam webAttackPageParam) {
         Page<WebAttack> page = webAttackService.page(webAttackPageParam);
         return CommonResult.data(page);
+    }
+
+    // ----------------------------------------------------------------
+    // 终端安全配置接口
+    // ----------------------------------------------------------------
+
+    @Operation(summary = "获取终端安全配置")
+    @GetMapping("/projectsafe/config/detail")
+    public CommonResult<EwmSafeConfig> getConfig(@NotEmpty(message = "终端ID不能为空") String safeId) {
+        EwmSafeConfig config = ewmSafeConfigService.getConfigBySafeId(safeId);
+        return CommonResult.data(config);
+    }
+
+    @Operation(summary = "保存终端安全配置")
+    @CommonLog("保存终端安全配置")
+    @PostMapping("/projectsafe/config/save")
+    public CommonResult<String> saveConfig(@RequestBody @Validated EwmSafeConfigParam param) {
+        ewmSafeConfigService.saveConfig(param);
+        return CommonResult.ok("配置保存成功");
+    }
+
+    @Operation(summary = "下载终端安全配置JSON")
+    @GetMapping("/projectsafe/config/download")
+    public void downloadConfig(@NotEmpty(message = "终端ID不能为空") String safeId, HttpServletResponse response) throws IOException {
+        String json = ewmSafeConfigService.generateConfigJson(safeId);
+        response.setContentType("application/json;charset=UTF-8");
+        response.setHeader("Content-Disposition",
+                "attachment;filename=" + URLEncoder.encode("client_config.json", StandardCharsets.UTF_8));
+        response.getWriter().write(json);
+        response.getWriter().flush();
     }
 
     // ----------------------------------------------------------------

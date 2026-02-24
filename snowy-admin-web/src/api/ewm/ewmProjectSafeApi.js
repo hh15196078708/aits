@@ -20,6 +20,14 @@ export default {
 		return request('monitor', data, 'get')
 	},
 
+	// 终端安全配置
+	getConfig(data) {
+		return request('config/detail', data, 'get')
+	},
+	saveConfig(data) {
+		return request('config/save', data)
+	},
+
 	// WSS 指令下发
 	sendAutoBlock(data) {
 		return wsRequest('autoblock', data)
