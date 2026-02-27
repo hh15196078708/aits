@@ -96,4 +96,8 @@ public class EwmProjectSafe {
 
     //SAFE_DISK_USAGE
     private String safeDiskUsage;
+
+    /** 终端安全配置JSON（存储EwmSafeConfig序列化后的JSON字符串） */
+    @Schema(description = "终端安全配置JSON")
+    private String configJson;
 }

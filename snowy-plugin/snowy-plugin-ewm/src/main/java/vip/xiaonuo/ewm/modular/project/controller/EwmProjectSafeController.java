@@ -134,8 +134,8 @@ public class EwmProjectSafeController {
 
     @Operation(summary = "获取终端安全配置")
     @GetMapping("/projectsafe/config/detail")
-    public CommonResult<EwmSafeConfig> getConfig(@NotEmpty(message = "终端ID不能为空") String safeId) {
-        EwmSafeConfig config = ewmSafeConfigService.getConfigBySafeId(safeId);
+    public CommonResult<java.util.Map<String, Object>> getConfig(@NotEmpty(message = "终端ID不能为空") String safeId) {
+        java.util.Map<String, Object> config = ewmSafeConfigService.getConfigBySafeId(safeId);
         return CommonResult.data(config);
     }
 

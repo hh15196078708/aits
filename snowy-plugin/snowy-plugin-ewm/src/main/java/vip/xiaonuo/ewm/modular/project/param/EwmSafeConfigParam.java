@@ -4,10 +4,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
 
-import java.util.List;
+import java.util.Map;
 
 /**
  * 终端安全配置参数
+ * <p>
+ * config 字段接收前端提交的完整配置对象（与 client_config.json 的 settings 结构对齐），
+ * 后端直接序列化为 JSON 字符串存储到 ewm_project_safe.config_json 中。
  *
  * @author Richai
  * @date 2026/02/24
@@ -20,42 +23,7 @@ public class EwmSafeConfigParam {
     @NotEmpty(message = "终端设备ID不能为空")
     private String safeId;
 
-    /** 是否开启IP自动拉黑 */
-    @Schema(description = "是否开启IP自动拉黑")
-    private Boolean ipBlockerEnabled;
-
-    /** IP白名单列表 */
-    @Schema(description = "IP白名单列表")
-    private List<String> ipWhitelist;
-
-    /** Web日志源列表 */
-    @Schema(description = "Web日志源列表")
-    private List<WebLogSourceItem> webLogSources;
-
-    /** 流量嗅探端口列表 */
-    @Schema(description = "流量嗅探端口列表")
-    private List<Integer> snifferPorts;
-
-    /** 是否开启流量嗅探抓包 */
-    @Schema(description = "是否开启流量嗅探抓包")
-    private Boolean snifferEnabled;
-
-    /** 攻击日志上报间隔（秒） */
-    @Schema(description = "攻击日志上报间隔（秒）")
-    private Integer attackLogUploadInterval;
-
-    /**
-     * Web日志源项
-     */
-    @Data
-    public static class WebLogSourceItem {
-        @Schema(description = "日志路径")
-        private String path;
-
-        @Schema(description = "日志类型（nginx/apache/iis/tomcat）")
-        private String type;
-
-        @Schema(description = "是否启用")
-        private Boolean enabled;
-    }
+    /** 完整配置对象（包含所有 settings 子节及 ipWhitelist、webLogSources 等可配置项） */
+    @Schema(description = "完整配置对象")
+    private Map<String, Object> config;
 }
